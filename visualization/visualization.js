@@ -455,16 +455,41 @@ function renderHeadings(headings, subsampledHeadingEstimation) {
   })));
 }
 
-function renderCurvature(approximations) {
+function renderCurvature(approximations, windowedApproximations) {
   const svg = document.querySelector("#curvature-plot");
-  const values = approximations.map((item) => ({
-    x: item.startWaypointIndex,
-    y: item.curvature,
+  const series = [
+    {
+      key: "curvature",
+      label: "Consecutive-point curvature",
+      color: COLORS.origin,
+      approximations,
+    },
+    {
+      key: "windowed-curvature",
+      label: "0.03 m window curvature",
+      color: COLORS.adapted,
+      approximations: windowedApproximations,
+    },
+  ].map((item) => ({
+    ...item,
+    values: item.approximations.map((approximation) => ({
+      x: approximation.waypointIndex,
+      y: approximation.curvature,
+    })),
   }));
-  const minX = values.length ? values[0].x : 0;
-  const maxX = values.length ? values[values.length - 1].x : 1;
-  let minY = values.length ? Math.min(...values.map((item) => item.y)) : -1;
-  let maxY = values.length ? Math.max(...values.map((item) => item.y)) : 1;
+  const allValues = series.flatMap((item) => item.values);
+  const minX = allValues.length
+    ? Math.min(...allValues.map(({ x }) => x))
+    : 0;
+  const maxX = allValues.length
+    ? Math.max(...allValues.map(({ x }) => x))
+    : 1;
+  let minY = allValues.length
+    ? Math.min(...allValues.map(({ y }) => y))
+    : -1;
+  let maxY = allValues.length
+    ? Math.max(...allValues.map(({ y }) => y))
+    : 1;
   const yPadding = Math.max((maxY - minY) * 0.08, 1e-6);
   minY -= yPadding;
   maxY += yPadding;
@@ -477,51 +502,53 @@ function renderCurvature(approximations) {
   drawAxes(
     svg,
     bounds,
-    "starting waypoint index",
+    "waypoint index",
     "curvature (1/m)",
     (value) => String(Math.max(minX, Math.min(maxX, Math.round(value)))),
   );
   svg.append(svgElement(
     "text",
     { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 },
-    "Curvature approximation by filtered path segment",
+    "Curvature approximations",
   ));
-  const group = createSeriesGroup(svg, "curvature");
-  if (values.length > 1) {
-    group.append(svgElement("polyline", {
-      points: values.map((value) => {
-        const pixel = mapPoint(value, bounds);
-        return `${pixel.x},${pixel.y}`;
-      }).join(" "),
-      fill: "none",
-      stroke: COLORS.origin,
-      "stroke-width": 2,
-      "stroke-linejoin": "round",
-      "stroke-linecap": "round",
-    }));
+  for (const item of series) {
+    const group = createSeriesGroup(svg, item.key);
+    if (item.values.length > 1) {
+      group.append(svgElement("polyline", {
+        points: item.values.map((value) => {
+          const pixel = mapPoint(value, bounds);
+          return `${pixel.x},${pixel.y}`;
+        }).join(" "),
+        fill: "none",
+        stroke: item.color,
+        "stroke-width": 2,
+        "stroke-linejoin": "round",
+        "stroke-linecap": "round",
+      }));
+    }
+    item.values.forEach((value, index) => {
+      const approximation = item.approximations[index];
+      const pixel = mapPoint(value, bounds);
+      addHoverPoint(
+        group,
+        svg.parentElement,
+        { value, pixel },
+        `waypoints ${approximation.startWaypointIndex}–${approximation.endWaypointIndex}`,
+        item.color,
+        4,
+        false,
+        `waypoints ${approximation.startWaypointIndex}–${approximation.endWaypointIndex}: ` +
+          `${approximation.curvature.toPrecision(6)} 1/m ` +
+          `(Δθ ${approximation.headingChange.toPrecision(6)} rad, ` +
+          `Δs ${approximation.distance.toPrecision(6)} m)`,
+      );
+    });
   }
-  values.forEach((value, index) => {
-    const approximation = approximations[index];
-    const pixel = mapPoint(value, bounds);
-    addHoverPoint(
-      group,
-      svg.parentElement,
-      { value, pixel },
-      `waypoints ${approximation.startWaypointIndex}–${approximation.endWaypointIndex}`,
-      COLORS.origin,
-      4,
-      false,
-      `waypoints ${approximation.startWaypointIndex}–${approximation.endWaypointIndex}: ` +
-        `${approximation.curvature.toPrecision(6)} 1/m ` +
-        `(Δθ ${approximation.headingChange.toPrecision(6)} rad, ` +
-        `Δs ${approximation.distance.toPrecision(6)} m)`,
-    );
-  });
-  drawLegend(svg, [{
-    label: "Signed curvature",
-    color: COLORS.origin,
-    target: "curvature",
-  }]);
+  drawLegend(svg, series.map(({ key, label, color }) => ({
+    label,
+    color,
+    target: key,
+  })));
 }
 
 function renderVelocities(velocities) {
@@ -616,6 +643,10 @@ function validateAnalysisData(data, pathLength) {
   const waypointDistanceStatistics = data.waypoint_distance_statistics;
   const subsampledEstimation = data.subsampled_heading_estimation;
   const curvatureApproximations = data.curvature_approximations;
+  const windowedCurvatureApproximations =
+    data.windowed_curvature_approximations;
+  const filteredWaypointIndices =
+    subsampledEstimation?.waypoint_indices ?? [];
   const waypointVelocities = data.waypoint_velocities;
   const speedModel = data.speed_model;
   const cleanedAreaGeometry = data.cleaned_area_geometry;
@@ -652,6 +683,8 @@ function validateAnalysisData(data, pathLength) {
     curvatureApproximations.length ===
       Math.max(0, subsampledEstimation?.waypoint_indices?.length - 1) &&
     curvatureApproximations.every((approximation, index) =>
+      approximation.waypoint_index ===
+        subsampledEstimation.waypoint_indices[index] &&
       approximation.start_waypoint_index ===
         subsampledEstimation.waypoint_indices[index] &&
       approximation.end_waypoint_index ===
@@ -667,15 +700,50 @@ function validateAnalysisData(data, pathLength) {
           approximation.heading_change / approximation.distance,
       ) < 1e-9,
     );
+  const validWindowedCurvatureApproximations =
+    Array.isArray(windowedCurvatureApproximations) &&
+    windowedCurvatureApproximations.length ===
+      (subsampledEstimation?.waypoint_indices?.length >= 2
+          ? subsampledEstimation.waypoint_indices.length
+          : 0) &&
+    windowedCurvatureApproximations.every((approximation, index, values) =>
+      approximation.waypoint_index ===
+          subsampledEstimation.waypoint_indices[index] &&
+      Number.isInteger(approximation.start_waypoint_index) &&
+      Number.isInteger(approximation.end_waypoint_index) &&
+      approximation.start_waypoint_index <= approximation.waypoint_index &&
+      approximation.end_waypoint_index >= approximation.waypoint_index &&
+      approximation.start_waypoint_index >=
+          subsampledEstimation.waypoint_indices[0] &&
+      approximation.end_waypoint_index <=
+          subsampledEstimation.waypoint_indices[
+            subsampledEstimation.waypoint_indices.length - 1
+          ] &&
+      Number.isFinite(approximation.heading_change) &&
+      approximation.heading_change >= -Math.PI &&
+      approximation.heading_change <= Math.PI &&
+      Number.isFinite(approximation.distance) &&
+      approximation.distance > 0 &&
+      (approximation.distance >= 0.03 - 1e-12 ||
+        approximation.start_waypoint_index === filteredWaypointIndices[0] ||
+        approximation.end_waypoint_index ===
+          filteredWaypointIndices[filteredWaypointIndices.length - 1]) &&
+      Number.isFinite(approximation.curvature) &&
+      Math.abs(
+          approximation.curvature -
+            approximation.heading_change / approximation.distance,
+      ) < 1e-9 &&
+      (index === 0 ||
+          approximation.waypoint_index > values[index - 1].waypoint_index),
+    );
   const validWaypointVelocities =
     Array.isArray(waypointVelocities) &&
-    waypointVelocities.length === subsampledEstimation?.waypoint_indices?.length &&
+    waypointVelocities.length ===
+      windowedCurvatureApproximations?.length &&
     waypointVelocities.every((velocity, index) => {
-      const curvature = index === 0
-        ? curvatureApproximations[0]?.curvature
-        : curvatureApproximations[index - 1]?.curvature;
+      const curvature = windowedCurvatureApproximations[index]?.curvature;
       return velocity.waypoint_index ===
-          subsampledEstimation.waypoint_indices[index] &&
+            subsampledEstimation.waypoint_indices[index] &&
         Number.isFinite(velocity.curvature) &&
         velocity.curvature === curvature &&
         Number.isFinite(velocity.speed) && velocity.speed > 0;
@@ -691,6 +759,7 @@ function validateAnalysisData(data, pathLength) {
       !Number.isFinite(data.traversal_time) ||
       data.traversal_time < 0 ||
       !validCurvatureApproximations ||
+      !validWindowedCurvatureApproximations ||
       !validWaypointVelocities ||
       !validSpeedModel ||
       !validCleanedAreaGeometry ||
@@ -713,12 +782,22 @@ function validateAnalysisData(data, pathLength) {
       polygon.map((ring) => ring.map(([x, y]) => ({ x, y }))),
     ),
     curvatureApproximations: curvatureApproximations.map((item) => ({
+      waypointIndex: item.waypoint_index,
       startWaypointIndex: item.start_waypoint_index,
       endWaypointIndex: item.end_waypoint_index,
       headingChange: item.heading_change,
       distance: item.distance,
       curvature: item.curvature,
     })),
+    windowedCurvatureApproximations:
+      windowedCurvatureApproximations.map((item) => ({
+        waypointIndex: item.waypoint_index,
+        startWaypointIndex: item.start_waypoint_index,
+        endWaypointIndex: item.end_waypoint_index,
+        headingChange: item.heading_change,
+        distance: item.distance,
+        curvature: item.curvature,
+      })),
     traversalTime: data.traversal_time,
     waypointVelocities: waypointVelocities.map((item) => ({
       waypointIndex: item.waypoint_index,
@@ -814,7 +893,10 @@ Promise.all([
     );
     renderGeometry(data.robot, data.cleaningGadget);
     renderHeadings(data.headings, data.subsampledHeadingEstimation);
-    renderCurvature(data.curvatureApproximations);
+    renderCurvature(
+      data.curvatureApproximations,
+      data.windowedCurvatureApproximations,
+    );
     renderVelocities(data.waypointVelocities);
     renderHeadingChangeStatistics(
       data.headingChangeStatistics,

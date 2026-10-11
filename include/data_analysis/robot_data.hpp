@@ -32,6 +32,7 @@ struct SubsampledHeadingEstimation {
 };
 
 struct CurvatureApproximation {
+    std::size_t waypoint_index;
     std::size_t start_waypoint_index;
     std::size_t end_waypoint_index;
     double heading_change;
@@ -55,6 +56,7 @@ struct RobotData {
     std::optional<WaypointDistanceStatistics> heading_change_statistics;
     SubsampledHeadingEstimation subsampled_heading_estimation;
     std::vector<CurvatureApproximation> curvature_approximations;
+    std::vector<CurvatureApproximation> windowed_curvature_approximations;
     std::vector<WaypointVelocity> waypoint_velocities;
     double traversal_time{};
     std::vector<std::vector<std::vector<Point2D>>> cleaned_area_geometry;

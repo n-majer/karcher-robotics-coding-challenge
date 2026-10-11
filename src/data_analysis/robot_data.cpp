@@ -139,8 +139,83 @@ std::vector<CurvatureApproximation> calculate_curvature_approximations(
                 "waypoints");
         }
         approximations.push_back(
-            {waypoint_indices[index], waypoint_indices[index + 1],
+            {waypoint_indices[index], waypoint_indices[index],
+             waypoint_indices[index + 1],
              heading_change, distance, heading_change / distance});
+    }
+    return approximations;
+}
+
+std::vector<CurvatureApproximation> calculate_windowed_curvature_approximations(
+    const std::vector<Point2D>& waypoints,
+    const std::vector<std::size_t>& waypoint_indices,
+    const std::vector<double>& headings,
+    double minimum_window_distance) {
+    if (waypoint_indices.size() != waypoints.size() ||
+        headings.size() != waypoints.size()) {
+        throw std::runtime_error(
+            "windowed curvature calculation requires matching filtered "
+            "waypoints, indices, and headings");
+    }
+
+    std::vector<CurvatureApproximation> approximations;
+    approximations.reserve(waypoints.size());
+    for (std::size_t index = 0; index < waypoints.size(); ++index) {
+        if (waypoints.size() < 2) {
+            break;
+        }
+
+        std::size_t left_index = index;
+        std::size_t right_index = index;
+        if (index == 0) {
+            right_index = index + 1;
+            while (right_index + 1 < waypoints.size() &&
+                   std::hypot(waypoints[right_index].x - waypoints[index].x,
+                              waypoints[right_index].y - waypoints[index].y) <
+                       minimum_window_distance) {
+                ++right_index;
+            }
+        } else if (index == waypoints.size() - 1) {
+            left_index = index - 1;
+            while (left_index > 0 &&
+                   std::hypot(waypoints[index].x - waypoints[left_index].x,
+                              waypoints[index].y - waypoints[left_index].y) <
+                       minimum_window_distance) {
+                --left_index;
+            }
+        } else {
+            const std::size_t max_offset =
+                std::min(index, waypoints.size() - 1 - index);
+            std::size_t offset = 1;
+            for (; offset < max_offset; ++offset) {
+                const Point2D& left = waypoints[index - offset];
+                const Point2D& right = waypoints[index + offset];
+                if (std::hypot(right.x - left.x, right.y - left.y) >=
+                    minimum_window_distance) {
+                    break;
+                }
+            }
+            left_index = index - offset;
+            right_index = index + offset;
+        }
+
+        const double distance =
+            std::hypot(waypoints[right_index].x - waypoints[left_index].x,
+                       waypoints[right_index].y - waypoints[left_index].y);
+        if (distance <= 0.0) {
+            throw std::runtime_error(
+                "windowed curvature calculation encountered coincident "
+                "neighboring waypoints");
+        }
+        const double raw_heading_change =
+            headings[right_index] - headings[left_index];
+        const double heading_change =
+            std::atan2(std::sin(raw_heading_change),
+                       std::cos(raw_heading_change));
+        approximations.push_back(
+            {waypoint_indices[index], waypoint_indices[left_index],
+             waypoint_indices[right_index], heading_change, distance,
+             heading_change / distance});
     }
     return approximations;
 }
@@ -159,25 +234,40 @@ double calculate_speed(double curvature) {
     return minimum_speed;
 }
 
-void calculate_velocities_and_traversal_time(RobotData& robot_data) {
+void calculate_velocities_and_traversal_time(
+    RobotData& robot_data,
+    const std::vector<Point2D>& filtered_waypoints) {
     robot_data.waypoint_velocities.clear();
     robot_data.traversal_time = 0.0;
-    const auto& approximations = robot_data.curvature_approximations;
+    const auto& approximations =
+        robot_data.windowed_curvature_approximations;
     if (approximations.empty()) {
         return;
     }
 
-    robot_data.waypoint_velocities.reserve(approximations.size() + 1);
-    const auto& first = approximations.front();
-    robot_data.waypoint_velocities.push_back(
-        {first.start_waypoint_index, first.curvature,
-         calculate_speed(first.curvature)});
+    if (approximations.size() != filtered_waypoints.size()) {
+        throw std::runtime_error(
+            "velocity calculation requires one windowed curvature per "
+            "filtered waypoint");
+    }
 
+    robot_data.waypoint_velocities.reserve(approximations.size());
+    std::vector<double> speeds;
+    speeds.reserve(approximations.size());
     for (const auto& approximation : approximations) {
         const double speed = calculate_speed(approximation.curvature);
         robot_data.waypoint_velocities.push_back(
-            {approximation.end_waypoint_index, approximation.curvature, speed});
-        robot_data.traversal_time += approximation.distance / speed;
+            {approximation.waypoint_index, approximation.curvature, speed});
+        speeds.push_back(speed);
+    }
+    for (std::size_t index = 1; index < approximations.size(); ++index) {
+        const double segment_distance =
+            std::hypot(filtered_waypoints[index].x -
+                           filtered_waypoints[index - 1].x,
+                       filtered_waypoints[index].y -
+                           filtered_waypoints[index - 1].y);
+        const double average_speed = (speeds[index - 1] + speeds[index]) / 2.0;
+        robot_data.traversal_time += segment_distance / average_speed;
     }
 }
 
@@ -391,7 +481,11 @@ void calculate_path_metrics(RobotData& robot_data) {
     robot_data.curvature_approximations = calculate_curvature_approximations(
         subsampled_waypoints, subsampled_estimation.waypoint_indices,
         subsampled_estimation.headings);
-    calculate_velocities_and_traversal_time(robot_data);
+    robot_data.windowed_curvature_approximations =
+        calculate_windowed_curvature_approximations(
+            subsampled_waypoints, subsampled_estimation.waypoint_indices,
+            subsampled_estimation.headings, heading_window_distance);
+    calculate_velocities_and_traversal_time(robot_data, subsampled_waypoints);
 
     if (!robot_data.waypoint_distances.empty()) {
         robot_data.waypoint_distance_statistics = calculate_distance_statistics(
@@ -501,7 +595,28 @@ void write_visualization_data(const RobotData& robot_data,
             output << ',';
         }
         const auto& approximation = robot_data.curvature_approximations[index];
-        output << "\n    { \"start_waypoint_index\": "
+        output << "\n    { \"waypoint_index\": "
+               << approximation.waypoint_index
+               << ", \"start_waypoint_index\": "
+               << approximation.start_waypoint_index
+               << ", \"end_waypoint_index\": "
+               << approximation.end_waypoint_index
+               << ", \"heading_change\": " << approximation.heading_change
+               << ", \"distance\": " << approximation.distance
+               << ", \"curvature\": " << approximation.curvature << " }";
+    }
+    output << "\n  ]";
+    output << ",\n  \"windowed_curvature_approximations\": [";
+    for (std::size_t index = 0;
+         index < robot_data.windowed_curvature_approximations.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto& approximation =
+            robot_data.windowed_curvature_approximations[index];
+        output << "\n    { \"waypoint_index\": "
+               << approximation.waypoint_index
+               << ", \"start_waypoint_index\": "
                << approximation.start_waypoint_index
                << ", \"end_waypoint_index\": "
                << approximation.end_waypoint_index

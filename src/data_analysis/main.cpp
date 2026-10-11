@@ -83,6 +83,28 @@ int main(int argc, char* argv[]) {
                       << "  Maximum: " << maximum->curvature << '\n'
                       << "  Mean:    " << mean << '\n';
         }
+        std::cout << "Windowed curvature approximations (0.03 m, 1/m): "
+                  << robot_data.windowed_curvature_approximations.size()
+                  << " filtered waypoints.\n";
+        if (!robot_data.windowed_curvature_approximations.empty()) {
+            const auto [minimum, maximum] = std::minmax_element(
+                robot_data.windowed_curvature_approximations.begin(),
+                robot_data.windowed_curvature_approximations.end(),
+                [](const auto& left, const auto& right) {
+                    return left.curvature < right.curvature;
+                });
+            const double mean = std::accumulate(
+                                    robot_data.windowed_curvature_approximations.begin(),
+                                    robot_data.windowed_curvature_approximations.end(),
+                                    0.0,
+                                    [](double total, const auto& value) {
+                                        return total + value.curvature;
+                                    }) /
+                                static_cast<double>(robot_data.windowed_curvature_approximations.size());
+            std::cout << "  Windowed curvature min/max/mean: "
+                      << minimum->curvature << " / " << maximum->curvature
+                      << " / " << mean << '\n';
+        }
         std::cout << "Waypoint velocity estimates: "
                   << robot_data.waypoint_velocities.size()
                   << " filtered waypoints.\n";
