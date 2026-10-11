@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Interactive robot path, footprint, and cleaning gadget visualization.">
+    <title>Kärcher Robotics Challenge — Data Visualization</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="visualization.js" defer></script>
+  </head>
+  <body>
+    <main class="page">
+      <header class="page-header">
+        <p class="eyebrow">Kärcher · Robotics Coding Challenge</p>
+        <h1>Robot data visualization</h1>
+        <p class="intro">Explore the recorded path and robot geometry. Hover over or focus a point to inspect its coordinates.</p>
+      </header>
+
+      <p id="status" class="status" role="status">Loading visualization…</p>
+
+      <section class="plots" aria-label="Robot data plots">
+        <article class="plot-card">
+          <h2>Robot path <span class="frame-tag">world frame</span></h2>
+          <div class="plot-wrap">
+            <svg id="path-plot" class="plot" viewBox="0 0 700 500" role="img" aria-label="Robot waypoints in the world frame"></svg>
+            <div class="tooltip" role="status" hidden></div>
+          </div>
+        </article>
+
+        <article class="plot-card">
+          <h2>Robot footprint and cleaning gadget <span class="frame-tag">base_link frame</span></h2>
+          <div class="plot-wrap">
+            <svg id="geometry-plot" class="plot" viewBox="0 0 700 500" role="img" aria-label="Robot footprint and cleaning gadget in the base_link frame"></svg>
+            <div class="tooltip" role="status" hidden></div>
+          </div>
+        </article>
+      </section>
+      <footer>Data source: <code>data/short.json</code></footer>
+    </main>
+  </body>
+</html>

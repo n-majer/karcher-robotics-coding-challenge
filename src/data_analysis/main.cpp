@@ -21,6 +21,8 @@ int main(int argc, char* argv[]) {
                   << " robot footprint points, and "
                   << robot_data.cleaning_gadget.size()
                   << " cleaning gadget points.\n";
+        std::cout << "Open index.html through a web server to view the "
+                     "interactive plots.\n";
     } catch (const std::exception& error) {
         std::cerr << "Failed to read '" << input_path << "': " << error.what()
                   << '\n';
