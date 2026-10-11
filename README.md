@@ -36,6 +36,16 @@ The C++ command-line application can validate and count the sample data:
 ./build/data_analysis
 ```
 
+### Tests
+
+The CTest suite includes an input-validation test that supplies a path point
+with three coordinates and checks that JSON parsing rejects it with the
+expected point-dimension error. Run it after configuring and building:
+
+```sh
+ctest --test-dir build --output-on-failure
+```
+
 ### Web Visualization
 
 The interactive browser visualization is a static page in `visualization/`. It loads geometry directly from `data/short.json` and the C++-computed metrics from `visualization/analysis.json`. First generate the metrics file with the C++ program, then serve the repository root over HTTP:
