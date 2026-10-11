@@ -176,9 +176,17 @@ function drawAxes(
 }
 
 function drawLegend(svg, items) {
-  const y = HEIGHT - 37;
+  const firstY = HEIGHT - 57;
+  const maximumX = WIDTH - PLOT.right;
   let x = PLOT.left + 4;
+  let row = 0;
   for (const item of items) {
+    const itemWidth = 38 + item.label.length * 7.2;
+    if (x + itemWidth > maximumX && x > PLOT.left + 4) {
+      row += 1;
+      x = PLOT.left + 4;
+    }
+    const y = firstY + row * 20;
     const entry = svgElement("g", {
       role: "button",
       tabindex: 0,
@@ -210,7 +218,7 @@ function drawLegend(svg, items) {
       }
     });
     svg.append(entry);
-    x += 38 + item.label.length * 7.2;
+    x += itemWidth;
   }
 }
 
@@ -326,11 +334,218 @@ function renderCleanedArea(svg, polygonGeometry, bounds) {
   }
 }
 
-function renderPath(waypoints, subsampledWaypointIndices, cleanedAreaGeometry) {
+function velocityColor(speed, minimum, maximum) {
+  const fraction = maximum === minimum
+    ? 0.5
+    : Math.max(0, Math.min(1, (speed - minimum) / (maximum - minimum)));
+  const stops = [
+    { position: 0, color: [49, 54, 149] },
+    { position: 0.5, color: [255, 255, 191] },
+    { position: 1, color: [165, 0, 38] },
+  ];
+  const upperIndex = stops.findIndex((stop) => stop.position >= fraction);
+  const lower = stops[Math.max(0, upperIndex - 1)];
+  const upper = stops[Math.max(0, upperIndex)];
+  const localFraction = upper.position === lower.position
+    ? 0
+    : (fraction - lower.position) / (upper.position - lower.position);
+  const channels = lower.color.map((channel, index) =>
+    Math.round(channel + (upper.color[index] - channel) * localFraction),
+  );
+  return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function renderVelocityPath(svg, filteredWaypoints, waypointVelocities, bounds) {
+  if (filteredWaypoints.length !== waypointVelocities.length ||
+      filteredWaypoints.length < 2) {
+    return;
+  }
+  const speeds = waypointVelocities.map((velocity) => velocity.speed);
+  const minimum = Math.min(...speeds);
+  const maximum = Math.max(...speeds);
+  const group = createSeriesGroup(svg, "velocity-path");
+  for (let index = 0; index < filteredWaypoints.length - 1; index += 1) {
+    const start = mapPoint(filteredWaypoints[index], bounds);
+    const end = mapPoint(filteredWaypoints[index + 1], bounds);
+    const speed = (speeds[index] + speeds[index + 1]) / 2;
+    group.append(svgElement("line", {
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
+      stroke: velocityColor(speed, minimum, maximum),
+      "stroke-width": 4,
+      "stroke-linecap": "round",
+      "aria-label": `Path segment velocity: ${formatNumber(speed)} m/s`,
+    }));
+  }
+}
+
+function renderVelocityScale(svg, waypointVelocities) {
+  const speeds = waypointVelocities.map((velocity) => velocity.speed);
+  const minimum = Math.min(...speeds);
+  const maximum = Math.max(...speeds);
+  const defs = svgElement("defs");
+  const gradient = svgElement("linearGradient", {
+    id: "path-velocity-gradient",
+    x1: "0%",
+    x2: "100%",
+    y1: "0%",
+    y2: "0%",
+  });
+  gradient.append(
+    svgElement("stop", { offset: "0%", "stop-color": velocityColor(minimum, minimum, maximum) }),
+    svgElement("stop", { offset: "50%", "stop-color": velocityColor((minimum + maximum) / 2, minimum, maximum) }),
+    svgElement("stop", { offset: "100%", "stop-color": velocityColor(maximum, minimum, maximum) }),
+  );
+  defs.append(gradient);
+  svg.prepend(defs);
+  const scaleX = 390;
+  const scaleWidth = 280;
+  const tickCount = 5;
+  const ticks = Array.from({ length: tickCount }, (_, index) => {
+    const fraction = index / (tickCount - 1);
+    const speed = minimum + fraction * (maximum - minimum);
+    const x = scaleX + fraction * scaleWidth;
+    return [
+      svgElement("line", {
+        x1: x,
+        y1: 40,
+        x2: x,
+        y2: 46,
+        stroke: COLORS.text,
+        "stroke-width": 1,
+      }),
+      svgElement("text", {
+        x,
+        y: 51,
+        fill: COLORS.text,
+        "font-size": 10,
+        "text-anchor": index === 0 ? "start" : index === tickCount - 1 ? "end" : "middle",
+      }, formatNumber(speed)),
+    ];
+  }).flat();
+  svg.append(
+    svgElement("text", { x: scaleX, y: 15, fill: COLORS.text, "font-size": 12, "font-weight": 650 }, "Velocity (m/s)"),
+    svgElement("rect", { x: scaleX, y: 20, width: scaleWidth, height: 18, rx: 5, fill: "url(#path-velocity-gradient)" }),
+    ...ticks,
+  );
+}
+
+function transformPosePoint(waypoint, point, heading) {
+  const cosine = Math.cos(heading);
+  const sine = Math.sin(heading);
+  return {
+    x: waypoint.x + point.x * cosine - point.y * sine,
+    y: waypoint.y + point.x * sine + point.y * cosine,
+  };
+}
+
+function renderHeadingArrows(svg, waypoints, headings, bounds) {
+  const group = createSeriesGroup(svg, "heading-arrows");
+  const markerId = "path-heading-arrow";
+  let defs = svg.querySelector("defs");
+  if (!defs) {
+    defs = svgElement("defs");
+    svg.prepend(defs);
+  }
+  const marker = svgElement("marker", {
+    id: markerId,
+    markerWidth: 7,
+    markerHeight: 7,
+    refX: 6,
+    refY: 3,
+    orient: "auto",
+    markerUnits: "strokeWidth",
+  });
+  marker.append(svgElement("path", {
+    d: "M0,0 L0,5 L6,2.5 z",
+    fill: "#202b36",
+  }));
+  defs.append(marker);
+
+  for (let index = 0; index < waypoints.length; index += 5) {
+    const start = mapPoint(waypoints[index], bounds);
+    const end = mapPoint(
+      transformPosePoint(waypoints[index], { x: 0.65, y: 0 }, headings[index]),
+      bounds,
+    );
+    const line = svgElement("line", {
+      x1: start.x,
+      y1: start.y,
+      x2: end.x,
+      y2: end.y,
+      stroke: "#202b36",
+      "stroke-width": 1.2,
+      "marker-end": `url(#${markerId})`,
+      "aria-label": `Heading at filtered waypoint ${index}`,
+    });
+    line.append(svgElement("title", {}, `Heading at filtered waypoint ${index}`));
+    group.append(line);
+  }
+}
+
+function renderRobotPoses(svg, waypoints, headings, robot, gadget, bounds) {
+  const robotGroup = createSeriesGroup(svg, "robot-poses");
+  const gadgetGroup = createSeriesGroup(svg, "gadget-poses");
+  for (let index = 0; index < waypoints.length; index += 10) {
+    const robotPixels = robot.map((point) =>
+      mapPoint(transformPosePoint(waypoints[index], point, headings[index]), bounds),
+    );
+    const robotPolygon = svgElement("polygon", {
+      points: robotPixels.map(({ x, y }) => `${x},${y}`).join(" "),
+      fill: COLORS.footprint,
+      "fill-opacity": 0.18,
+      stroke: COLORS.footprint,
+      "stroke-width": 1.5,
+      "aria-label": `Robot footprint at filtered waypoint ${index}`,
+    });
+    robotPolygon.append(svgElement("title", {}, `Robot footprint at filtered waypoint ${index}`));
+    robotGroup.append(robotPolygon);
+
+    const gadgetPixels = gadget.map((point) =>
+      mapPoint(transformPosePoint(waypoints[index], point, headings[index]), bounds),
+    );
+    const gadgetLine = svgElement("line", {
+      x1: gadgetPixels[0].x,
+      y1: gadgetPixels[0].y,
+      x2: gadgetPixels[1].x,
+      y2: gadgetPixels[1].y,
+      stroke: COLORS.gadget,
+      "stroke-width": 3,
+      "stroke-linecap": "round",
+      "aria-label": `Cleaning gadget at filtered waypoint ${index}`,
+    });
+    gadgetLine.append(svgElement("title", {}, `Cleaning gadget at filtered waypoint ${index}`));
+    gadgetGroup.append(gadgetLine);
+  }
+}
+
+function renderPath(
+  waypoints,
+  subsampledWaypointIndices,
+  cleanedAreaGeometry,
+  waypointVelocities,
+  subsampledHeadings,
+  robot,
+  gadget,
+) {
   const svg = document.querySelector("#path-plot");
   const wrap = svg.parentElement;
+  const filteredWaypoints = subsampledWaypointIndices.map((index) => waypoints[index]);
+  const posePoints = [];
+  for (let index = 0; index < filteredWaypoints.length; index += 20) {
+    posePoints.push(
+      ...robot.map((point) =>
+        transformPosePoint(filteredWaypoints[index], point, subsampledHeadings[index]),
+      ),
+      ...gadget.map((point) =>
+        transformPosePoint(filteredWaypoints[index], point, subsampledHeadings[index]),
+      ),
+    );
+  }
   const cleanedAreaPoints = cleanedAreaGeometry.flat(2);
-  const bounds = getBounds([waypoints, cleanedAreaPoints]);
+  const bounds = getBounds([waypoints, cleanedAreaPoints, posePoints]);
   drawAxes(svg, bounds, "x (m)", "y (m)");
   svg.append(svgElement("text", { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 }, "Robot path · world frame"));
   renderCleanedArea(svg, cleanedAreaGeometry, bounds);
@@ -343,7 +558,6 @@ function renderPath(waypoints, subsampledWaypointIndices, cleanedAreaGeometry) {
       addHoverPoint(original.group, wrap, original.pixels[original.pixels.length - 1], "goal (world frame)", COLORS.goal, 8, true);
     }
   }
-  const filteredWaypoints = subsampledWaypointIndices.map((index) => waypoints[index]);
   drawPathSeries(
     svg,
     wrap,
@@ -354,10 +568,30 @@ function renderPath(waypoints, subsampledWaypointIndices, cleanedAreaGeometry) {
     COLORS.adapted,
     subsampledWaypointIndices,
   );
+  renderVelocityPath(
+    svg,
+    filteredWaypoints,
+    waypointVelocities,
+    bounds,
+  );
+  renderVelocityScale(svg, waypointVelocities);
+  renderHeadingArrows(svg, filteredWaypoints, subsampledHeadings, bounds);
+  renderRobotPoses(
+    svg,
+    filteredWaypoints,
+    subsampledHeadings,
+    robot,
+    gadget,
+    bounds,
+  );
   drawLegend(svg, [
     { label: "Recorded path", color: COLORS.path, target: "original-path" },
     { label: "Filtered path (0.01 m)", color: COLORS.adapted, target: "filtered-path" },
     { label: "Cleaned area", color: "#267653", target: "cleaned-area" },
+    { label: "Speed", color: "url(#path-velocity-gradient)", target: "velocity-path" },
+    { label: "Heading (every 5)", color: "#202b36", target: "heading-arrows" },
+    { label: "Robot (every 10)", color: COLORS.footprint, target: "robot-poses" },
+    { label: "Gadget (every 10)", color: COLORS.gadget, target: "gadget-poses" },
   ]);
 }
 
@@ -890,6 +1124,10 @@ Promise.all([
       data.path,
       data.subsampledHeadingEstimation.waypointIndices,
       data.cleanedAreaGeometry,
+      data.waypointVelocities,
+      data.subsampledHeadingEstimation.headings,
+      data.robot,
+      data.cleaningGadget,
     );
     renderGeometry(data.robot, data.cleaningGadget);
     renderHeadings(data.headings, data.subsampledHeadingEstimation);
