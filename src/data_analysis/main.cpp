@@ -31,6 +31,8 @@ int main(int argc, char* argv[]) {
                   << " m.\n"
                   << "Calculated cleaned area: " << robot_data.cleaned_area
                   << " m^2.\n"
+                  << "Estimated traversal time: " << robot_data.traversal_time
+                  << " s.\n"
                   << "Saved precomputed visualization data to " << output_path
                   << ".\n";
 
@@ -81,6 +83,9 @@ int main(int argc, char* argv[]) {
                       << "  Maximum: " << maximum->curvature << '\n'
                       << "  Mean:    " << mean << '\n';
         }
+        std::cout << "Waypoint velocity estimates: "
+                  << robot_data.waypoint_velocities.size()
+                  << " filtered waypoints.\n";
     } catch (const std::exception& error) {
         std::cerr << "Failed to read '" << input_path << "': " << error.what()
                   << '\n';

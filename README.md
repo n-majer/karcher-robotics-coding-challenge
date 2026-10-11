@@ -80,6 +80,8 @@ The cleaned area is calculated from the filtered path (minimum waypoint spacing 
 
 For each consecutive pair of filtered waypoints, the curvature approximation is the signed, wrap-aware heading change divided by the Euclidean distance between the waypoints: $\kappa_i = \operatorname{atan2}(\sin(\theta_{i+1}-\theta_i),\cos(\theta_{i+1}-\theta_i)) / \Delta s_i$. Values are recorded with both original waypoint indices and plotted against the starting waypoint index in units of inverse meters.
 
+The velocity estimate applies the PDF's piecewise speed model to the magnitude of each signed curvature: $v_{\max}=1.10$ m/s below $|\kappa|=0.5$ 1/m, linearly interpolating down to $v_{\min}=0.15$ m/s at $|\kappa|=10$ 1/m, and remaining at $v_{\min}$ above that. Each segment uses its curvature-derived speed; the first filtered waypoint is assigned the first segment's speed, and each subsequent waypoint is assigned the incoming segment's speed. Estimated traversal time is the sum of each filtered segment distance divided by its speed. This is a curvature-only estimate and does not model acceleration, deceleration, or stops at endpoints.
+
 ## Assumptions
 
 - I assume that the robot drove with constant heading in a straight line between two consecutive waypoints of the path.

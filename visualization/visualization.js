@@ -524,6 +524,68 @@ function renderCurvature(approximations) {
   }]);
 }
 
+function renderVelocities(velocities) {
+  const svg = document.querySelector("#velocity-plot");
+  const values = velocities.map((item) => ({
+    x: item.waypointIndex,
+    y: item.speed,
+  }));
+  const minX = values.length ? values[0].x : 0;
+  const maxX = values.length ? values[values.length - 1].x : 1;
+  const bounds = {
+    minX: minX - 0.5,
+    maxX: Math.max(minX + 0.5, maxX + 0.5),
+    minY: 0,
+    maxY: Math.max(1.2, ...values.map((item) => item.y)) * 1.05,
+  };
+  drawAxes(
+    svg,
+    bounds,
+    "waypoint index",
+    "speed (m/s)",
+    (value) => String(Math.max(minX, Math.min(maxX, Math.round(value)))),
+  );
+  svg.append(svgElement(
+    "text",
+    { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 },
+    "Estimated velocity at filtered waypoints",
+  ));
+  const group = createSeriesGroup(svg, "velocity");
+  if (values.length > 1) {
+    group.append(svgElement("polyline", {
+      points: values.map((value) => {
+        const pixel = mapPoint(value, bounds);
+        return `${pixel.x},${pixel.y}`;
+      }).join(" "),
+      fill: "none",
+      stroke: COLORS.adapted,
+      "stroke-width": 2,
+      "stroke-linejoin": "round",
+      "stroke-linecap": "round",
+    }));
+  }
+  values.forEach((value, index) => {
+    const velocity = velocities[index];
+    const pixel = mapPoint(value, bounds);
+    addHoverPoint(
+      group,
+      svg.parentElement,
+      { value, pixel },
+      `waypoint ${velocity.waypointIndex}`,
+      COLORS.adapted,
+      4,
+      false,
+      `waypoint ${velocity.waypointIndex}: ${velocity.speed.toPrecision(6)} m/s ` +
+        `(curvature ${velocity.curvature.toPrecision(6)} 1/m)`,
+    );
+  });
+  drawLegend(svg, [{
+    label: "Estimated speed",
+    color: COLORS.adapted,
+    target: "velocity",
+  }]);
+}
+
 function validatePointData(data) {
   const pointKeys = ["path", "robot", "cleaning_gadget"];
   for (const key of pointKeys) {
@@ -554,6 +616,8 @@ function validateAnalysisData(data, pathLength) {
   const waypointDistanceStatistics = data.waypoint_distance_statistics;
   const subsampledEstimation = data.subsampled_heading_estimation;
   const curvatureApproximations = data.curvature_approximations;
+  const waypointVelocities = data.waypoint_velocities;
+  const speedModel = data.speed_model;
   const cleanedAreaGeometry = data.cleaned_area_geometry;
   const validCleanedAreaGeometry = Array.isArray(cleanedAreaGeometry) &&
     cleanedAreaGeometry.every((polygon) =>
@@ -603,10 +667,32 @@ function validateAnalysisData(data, pathLength) {
           approximation.heading_change / approximation.distance,
       ) < 1e-9,
     );
+  const validWaypointVelocities =
+    Array.isArray(waypointVelocities) &&
+    waypointVelocities.length === subsampledEstimation?.waypoint_indices?.length &&
+    waypointVelocities.every((velocity, index) => {
+      const curvature = index === 0
+        ? curvatureApproximations[0]?.curvature
+        : curvatureApproximations[index - 1]?.curvature;
+      return velocity.waypoint_index ===
+          subsampledEstimation.waypoint_indices[index] &&
+        Number.isFinite(velocity.curvature) &&
+        velocity.curvature === curvature &&
+        Number.isFinite(velocity.speed) && velocity.speed > 0;
+    });
+  const validSpeedModel = speedModel &&
+    speedModel.maximum_speed === 1.1 &&
+    speedModel.minimum_speed === 0.15 &&
+    speedModel.curvature_critical === 0.5 &&
+    speedModel.curvature_maximum === 10;
   if (!Number.isFinite(data.path_length) ||
       !Number.isFinite(data.cleaned_area) ||
       data.cleaned_area < 0 ||
+      !Number.isFinite(data.traversal_time) ||
+      data.traversal_time < 0 ||
       !validCurvatureApproximations ||
+      !validWaypointVelocities ||
+      !validSpeedModel ||
       !validCleanedAreaGeometry ||
       !Array.isArray(data.headings) ||
       data.headings.length !== pathLength ||
@@ -632,6 +718,12 @@ function validateAnalysisData(data, pathLength) {
       headingChange: item.heading_change,
       distance: item.distance,
       curvature: item.curvature,
+    })),
+    traversalTime: data.traversal_time,
+    waypointVelocities: waypointVelocities.map((item) => ({
+      waypointIndex: item.waypoint_index,
+      curvature: item.curvature,
+      speed: item.speed,
     })),
     headings: data.headings,
     waypointDistanceStatistics,
@@ -723,6 +815,7 @@ Promise.all([
     renderGeometry(data.robot, data.cleaningGadget);
     renderHeadings(data.headings, data.subsampledHeadingEstimation);
     renderCurvature(data.curvatureApproximations);
+    renderVelocities(data.waypointVelocities);
     renderHeadingChangeStatistics(
       data.headingChangeStatistics,
       data.subsampledHeadingEstimation,
@@ -736,6 +829,10 @@ Promise.all([
     cleanedArea.textContent =
       `Calculated cleaned area: ${formatNumber(data.cleanedArea)} m²`;
     cleanedArea.hidden = false;
+    const traversalTime = document.querySelector("#traversal-time");
+    traversalTime.textContent =
+      `Estimated traversal time: ${formatNumber(data.traversalTime)} s`;
+    traversalTime.hidden = false;
     setStatus("");
   })
   .catch((error) => {

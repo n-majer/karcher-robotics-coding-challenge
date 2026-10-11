@@ -145,6 +145,42 @@ std::vector<CurvatureApproximation> calculate_curvature_approximations(
     return approximations;
 }
 
+double calculate_speed(double curvature) {
+    const double magnitude = std::abs(curvature);
+    if (magnitude < curvature_critical) {
+        return maximum_speed;
+    }
+    if (magnitude < curvature_maximum) {
+        const double slowdown =
+            (maximum_speed - minimum_speed) /
+            (curvature_maximum - curvature_critical);
+        return maximum_speed - slowdown * (magnitude - curvature_critical);
+    }
+    return minimum_speed;
+}
+
+void calculate_velocities_and_traversal_time(RobotData& robot_data) {
+    robot_data.waypoint_velocities.clear();
+    robot_data.traversal_time = 0.0;
+    const auto& approximations = robot_data.curvature_approximations;
+    if (approximations.empty()) {
+        return;
+    }
+
+    robot_data.waypoint_velocities.reserve(approximations.size() + 1);
+    const auto& first = approximations.front();
+    robot_data.waypoint_velocities.push_back(
+        {first.start_waypoint_index, first.curvature,
+         calculate_speed(first.curvature)});
+
+    for (const auto& approximation : approximations) {
+        const double speed = calculate_speed(approximation.curvature);
+        robot_data.waypoint_velocities.push_back(
+            {approximation.end_waypoint_index, approximation.curvature, speed});
+        robot_data.traversal_time += approximation.distance / speed;
+    }
+}
+
 std::pair<std::vector<double>, std::vector<double>> estimate_headings(
     const std::vector<Point2D>& waypoints,
     double window_distance) {
@@ -355,6 +391,7 @@ void calculate_path_metrics(RobotData& robot_data) {
     robot_data.curvature_approximations = calculate_curvature_approximations(
         subsampled_waypoints, subsampled_estimation.waypoint_indices,
         subsampled_estimation.headings);
+    calculate_velocities_and_traversal_time(robot_data);
 
     if (!robot_data.waypoint_distances.empty()) {
         robot_data.waypoint_distance_statistics = calculate_distance_statistics(
@@ -471,6 +508,24 @@ void write_visualization_data(const RobotData& robot_data,
                << ", \"heading_change\": " << approximation.heading_change
                << ", \"distance\": " << approximation.distance
                << ", \"curvature\": " << approximation.curvature << " }";
+    }
+    output << "\n  ]";
+    output << ",\n  \"speed_model\": {\n"
+           << "    \"maximum_speed\": " << maximum_speed
+           << ",\n    \"minimum_speed\": " << minimum_speed
+           << ",\n    \"curvature_critical\": " << curvature_critical
+           << ",\n    \"curvature_maximum\": " << curvature_maximum
+           << "\n  },\n  \"traversal_time\": " << robot_data.traversal_time
+           << ",\n  \"waypoint_velocities\": [";
+    for (std::size_t index = 0; index < robot_data.waypoint_velocities.size();
+         ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto& velocity = robot_data.waypoint_velocities[index];
+        output << "\n    { \"waypoint_index\": " << velocity.waypoint_index
+               << ", \"curvature\": " << velocity.curvature
+               << ", \"speed\": " << velocity.speed << " }";
     }
     output << "\n  ]";
     const auto& subsampled_estimation =
