@@ -1,14 +1,14 @@
 #pragma once
 
-#include <array>
+#include <cstddef>
 #include <filesystem>
 #include <optional>
 #include <vector>
 
 namespace data_analysis {
 
-inline constexpr std::array<double, 3> heading_distance_windows{
-    0.01, 0.05, 0.1};
+inline constexpr double subsampling_distance = 0.01;
+inline constexpr double heading_window_distance = 0.03;
 
 struct Point2D {
     double x;
@@ -21,25 +21,10 @@ struct WaypointDistanceStatistics {
     double mean;
 };
 
-struct HeadingEstimationVariant {
-    double window_distance;
+struct SubsampledHeadingEstimation {
+    std::vector<std::size_t> waypoint_indices;
     std::vector<double> headings;
-    std::vector<double> distances;
-    std::optional<WaypointDistanceStatistics> distance_statistics;
     std::optional<WaypointDistanceStatistics> heading_change_statistics;
-};
-
-struct SubsamplingCombination {
-    double minimum_waypoint_distance;
-    double window_distance;
-    std::size_t waypoint_count;
-    WaypointDistanceStatistics heading_change_statistics;
-};
-
-struct SubsamplingSearch {
-    double maximum_allowed_heading_change;
-    std::vector<double> candidate_distances;
-    std::vector<SubsamplingCombination> qualifying_combinations;
 };
 
 struct RobotData {
@@ -47,12 +32,13 @@ struct RobotData {
     std::vector<Point2D> robot_footprint;
     std::vector<Point2D> cleaning_gadget;
     double path_length{};
+    double cleaned_area{};
     std::vector<double> headings;
     std::optional<WaypointDistanceStatistics> heading_change_statistics;
-    std::vector<HeadingEstimationVariant> adapted_heading_variants;
+    SubsampledHeadingEstimation subsampled_heading_estimation;
+    std::vector<std::vector<std::vector<Point2D>>> cleaned_area_geometry;
     std::vector<double> waypoint_distances;
     std::optional<WaypointDistanceStatistics> waypoint_distance_statistics;
-    SubsamplingSearch subsampling_search;
 };
 
 RobotData read_robot_data(const std::filesystem::path& json_file);

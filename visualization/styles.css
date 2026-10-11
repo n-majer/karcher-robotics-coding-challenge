@@ -208,6 +208,19 @@ h1 {
   stroke-width: 3px;
 }
 
+.plot-legend-item {
+  cursor: pointer;
+}
+
+.plot-legend-item:focus-visible {
+  outline: 2px solid #18232d;
+  outline-offset: 2px;
+}
+
+.plot-legend-item.is-hidden {
+  opacity: 0.4;
+}
+
 .tooltip {
   position: absolute;
   z-index: 2;

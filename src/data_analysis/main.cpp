@@ -1,6 +1,5 @@
 #include "data_analysis/robot_data.hpp"
 
-#include <cmath>
 #include <exception>
 #include <iomanip>
 #include <iostream>
@@ -26,7 +25,10 @@ int main(int argc, char* argv[]) {
                   << " robot footprint points, and "
                   << robot_data.cleaning_gadget.size()
                   << " cleaning gadget points.\n";
-        std::cout << "Path length: " << robot_data.path_length << " m.\n"
+        std::cout << "Filtered path length: " << robot_data.path_length
+                  << " m.\n"
+                  << "Calculated cleaned area: " << robot_data.cleaned_area
+                  << " m^2.\n"
                   << "Saved precomputed visualization data to " << output_path
                   << ".\n";
 
@@ -41,34 +43,18 @@ int main(int argc, char* argv[]) {
                       << "  Mean:    " << statistics.mean << '\n';
         }
         std::cout << std::setprecision(6);
-        for (const auto& variant : robot_data.adapted_heading_variants) {
-            std::cout << "Heading neighbor distances for "
-                      << variant.window_distance << " m window (m):\n";
-            if (!variant.distance_statistics) {
-                std::cout << "  No heading-estimation distances available.\n";
-                continue;
-            }
-            const auto& statistics = *variant.distance_statistics;
-            std::cout << "  Minimum: " << statistics.minimum << '\n'
-                      << "  Maximum: " << statistics.maximum << '\n'
-                      << "  Mean:    " << statistics.mean << '\n';
-        }
-        const auto& search = robot_data.subsampling_search;
-        std::cout << "Subsampling/window combinations with maximum heading "
-                     "change below 30 degrees:\n";
-        if (search.qualifying_combinations.empty()) {
-            std::cout << "  None found among " << search.candidate_distances.size()
-                      << " candidate distances.\n";
-        }
-        for (const auto& combination : search.qualifying_combinations) {
-            std::cout << "  Subsample >= "
-                      << combination.minimum_waypoint_distance
-                      << " m; heading window >= " << combination.window_distance
-                      << " m; " << combination.waypoint_count
-                      << " waypoints; maximum change "
-                      << combination.heading_change_statistics.maximum *
-                             180.0 / std::acos(-1.0)
-                      << " degrees.\n";
+        const auto& estimate = robot_data.subsampled_heading_estimation;
+        std::cout << "Subsampled heading estimate (minimum waypoint distance "
+                  << data_analysis::subsampling_distance
+                  << " m, heading window "
+                  << data_analysis::heading_window_distance << " m):\n"
+                  << "  Retained waypoints: " << estimate.waypoint_indices.size()
+                  << '\n';
+        if (estimate.heading_change_statistics) {
+            const auto& statistics = *estimate.heading_change_statistics;
+            std::cout << "  Heading change min/max/mean (rad): "
+                      << statistics.minimum << " / " << statistics.maximum
+                      << " / " << statistics.mean << '\n';
         }
     } catch (const std::exception& error) {
         std::cerr << "Failed to read '" << input_path << "': " << error.what()

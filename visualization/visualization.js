@@ -14,7 +14,7 @@ const COLORS = {
   start: "#16834a",
   goal: "#c4373f",
   origin: "#7951a1",
-  adapted: ["#d07b24", "#168c87", "#b34a9b"],
+  adapted: "#d07b24",
   xAxis: "#c4373f",
   yAxis: "#21834b",
 };
@@ -141,7 +141,13 @@ function addHoverPoint(
   svg.append(circle);
 }
 
-function drawAxes(svg, bounds, xLabel = "x", yLabel = "y") {
+function drawAxes(
+  svg,
+  bounds,
+  xLabel = "x",
+  yLabel = "y",
+  formatXTick = formatNumber,
+) {
   for (let tick = 0; tick <= 5; tick += 1) {
     const fraction = tick / 5;
     const x = PLOT.left + fraction * (WIDTH - PLOT.left - PLOT.right);
@@ -151,7 +157,7 @@ function drawAxes(svg, bounds, xLabel = "x", yLabel = "y") {
     svg.append(
       svgElement("line", { x1: x, y1: PLOT.top, x2: x, y2: HEIGHT - PLOT.bottom, stroke: COLORS.grid }),
       svgElement("line", { x1: PLOT.left, y1: y, x2: WIDTH - PLOT.right, y2: y, stroke: COLORS.grid }),
-      svgElement("text", { x, y: HEIGHT - PLOT.bottom + 22, "text-anchor": "middle", fill: COLORS.text, "font-size": 11 }, formatNumber(xValue)),
+      svgElement("text", { x, y: HEIGHT - PLOT.bottom + 22, "text-anchor": "middle", fill: COLORS.text, "font-size": 11 }, formatXTick(xValue)),
       svgElement("text", { x: PLOT.left - 10, y: y + 4, "text-anchor": "end", fill: COLORS.text, "font-size": 11 }, formatNumber(yValue)),
     );
   }
@@ -173,42 +179,88 @@ function drawLegend(svg, items) {
   const y = HEIGHT - 37;
   let x = PLOT.left + 4;
   for (const item of items) {
-    svg.append(
+    const entry = svgElement("g", {
+      role: "button",
+      tabindex: 0,
+      "aria-label": `Toggle ${item.label}`,
+      "aria-pressed": "true",
+      "data-legend-target": item.target,
+      class: "plot-legend-item",
+    });
+    entry.append(
       svgElement("line", { x1: x, y1: y - 4, x2: x + 20, y2: y - 4, stroke: item.color, "stroke-width": 3 }),
       svgElement("text", { x: x + 26, y, fill: COLORS.text, "font-size": 12 }, item.label),
     );
+    const toggleSeries = () => {
+      const series = svg.querySelector(`[data-series="${item.target}"]`);
+      const isVisible = series.getAttribute("display") !== "none";
+      if (isVisible) {
+        series.setAttribute("display", "none");
+      } else {
+        series.removeAttribute("display");
+      }
+      entry.setAttribute("aria-pressed", String(!isVisible));
+      entry.classList.toggle("is-hidden", isVisible);
+    };
+    entry.addEventListener("click", toggleSeries);
+    entry.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        toggleSeries();
+      }
+    });
+    svg.append(entry);
     x += 38 + item.label.length * 7.2;
   }
 }
 
-function drawPath(svg, plotWrap, waypoints, bounds) {
+function createSeriesGroup(svg, key) {
+  const group = svgElement("g", { "data-series": key });
+  svg.append(group);
+  return group;
+}
+
+function drawPathSeries(
+  svg,
+  plotWrap,
+  waypoints,
+  bounds,
+  key,
+  label,
+  color,
+  waypointIndices = waypoints.map((_, index) => index),
+) {
+  const group = createSeriesGroup(svg, key);
   const pixels = waypoints.map((value) => ({ value, pixel: mapPoint(value, bounds) }));
   if (pixels.length > 1) {
-    svg.append(svgElement("polyline", {
+    group.append(svgElement("polyline", {
       points: pixels.map(({ pixel }) => `${pixel.x},${pixel.y}`).join(" "),
       fill: "none",
-      stroke: COLORS.path,
-      "stroke-width": 2,
+      stroke: color,
+      "stroke-width": key === "original-path" ? 2 : 3,
       "stroke-linejoin": "round",
       "stroke-linecap": "round",
     }));
   }
   pixels.forEach((point, index) => {
-    addHoverPoint(svg, plotWrap, point, `world waypoint [${index}]`, COLORS.path, 3);
+    addHoverPoint(
+      group,
+      plotWrap,
+      point,
+      `${label} waypoint [${waypointIndices[index]}]`,
+      color,
+      3,
+    );
   });
-  if (pixels.length > 0) {
-    addHoverPoint(svg, plotWrap, pixels[0], "start (world frame)", COLORS.start, 8, true);
-    if (pixels.length > 1) {
-      addHoverPoint(svg, plotWrap, pixels[pixels.length - 1], "goal (world frame)", COLORS.goal, 8, true);
-    }
-  }
+  return { group, pixels };
 }
 
 function drawPolygon(svg, plotWrap, points, bounds, label, color, close = false) {
+  const group = createSeriesGroup(svg, label);
   const pixels = points.map((value) => ({ value, pixel: mapPoint(value, bounds) }));
   if (pixels.length > 1) {
     const sequence = close ? [...pixels, pixels[0]] : pixels;
-    svg.append(svgElement("polyline", {
+    group.append(svgElement("polyline", {
       points: sequence.map(({ pixel }) => `${pixel.x},${pixel.y}`).join(" "),
       fill: "none",
       stroke: color,
@@ -218,17 +270,18 @@ function drawPolygon(svg, plotWrap, points, bounds, label, color, close = false)
     }));
   }
   pixels.forEach((point, index) => {
-    addHoverPoint(svg, plotWrap, point, `${label} [${index}]`, color, 5);
+    addHoverPoint(group, plotWrap, point, `${label} [${index}]`, color, 5);
   });
 }
 
 function drawBaseLink(svg, plotWrap, bounds) {
+  const group = createSeriesGroup(svg, "base-link");
   const origin = { x: 0, y: 0 };
   const pixel = mapPoint(origin, bounds);
   const axisLength = 48;
   const xEnd = { x: pixel.x + axisLength, y: pixel.y };
   const yEnd = { x: pixel.x, y: pixel.y - axisLength };
-  svg.append(
+  group.append(
     svgElement("defs"),
   );
   let defs = svg.querySelector("defs");
@@ -248,20 +301,63 @@ function drawBaseLink(svg, plotWrap, bounds) {
     svgElement("text", { x: yEnd.x - 6, y: yEnd.y - 7, fill: COLORS.yAxis, "font-size": 13, "font-weight": 700 }, "y"),
     svgElement("text", { x: pixel.x + 9, y: pixel.y + 20, fill: COLORS.origin, "font-size": 12 }, "base_link (0,0)"),
   );
-  addHoverPoint(svg, plotWrap, { value: origin, pixel }, "base_link origin", COLORS.origin, 6, true);
+  addHoverPoint(group, plotWrap, { value: origin, pixel }, "base_link origin", COLORS.origin, 6, true);
 }
 
-function renderPath(waypoints) {
+function renderCleanedArea(svg, polygonGeometry, bounds) {
+  const group = createSeriesGroup(svg, "cleaned-area");
+  const pathData = polygonGeometry.map((polygon) =>
+    polygon.map((ring) => {
+      const pixels = ring.map((point) => mapPoint(point, bounds));
+      return `M ${pixels.map(({ x, y }) => `${x} ${y}`).join(" L ")} Z`;
+    }).join(" "),
+  ).join(" ");
+  if (pathData) {
+    group.append(svgElement("path", {
+      d: pathData,
+      fill: "#4b9d79",
+      "fill-opacity": 0.3,
+      "fill-rule": "evenodd",
+      stroke: "#267653",
+      "stroke-width": 1.5,
+      "pointer-events": "none",
+      "aria-label": "Calculated cleaned area",
+    }));
+  }
+}
+
+function renderPath(waypoints, subsampledWaypointIndices, cleanedAreaGeometry) {
   const svg = document.querySelector("#path-plot");
   const wrap = svg.parentElement;
-  const bounds = getBounds([waypoints]);
+  const cleanedAreaPoints = cleanedAreaGeometry.flat(2);
+  const bounds = getBounds([waypoints, cleanedAreaPoints]);
   drawAxes(svg, bounds, "x (m)", "y (m)");
   svg.append(svgElement("text", { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 }, "Robot path · world frame"));
-  drawPath(svg, wrap, waypoints, bounds);
+  renderCleanedArea(svg, cleanedAreaGeometry, bounds);
+  const original = drawPathSeries(
+    svg, wrap, waypoints, bounds, "original-path", "Recorded path", COLORS.path,
+  );
+  if (original.pixels.length > 0) {
+    addHoverPoint(original.group, wrap, original.pixels[0], "start (world frame)", COLORS.start, 8, true);
+    if (original.pixels.length > 1) {
+      addHoverPoint(original.group, wrap, original.pixels[original.pixels.length - 1], "goal (world frame)", COLORS.goal, 8, true);
+    }
+  }
+  const filteredWaypoints = subsampledWaypointIndices.map((index) => waypoints[index]);
+  drawPathSeries(
+    svg,
+    wrap,
+    filteredWaypoints,
+    bounds,
+    "filtered-path",
+    "Filtered path (0.01 m)",
+    COLORS.adapted,
+    subsampledWaypointIndices,
+  );
   drawLegend(svg, [
-    { label: "world-frame path", color: COLORS.path },
-    { label: "start", color: COLORS.start },
-    { label: "goal", color: COLORS.goal },
+    { label: "Recorded path", color: COLORS.path, target: "original-path" },
+    { label: "Filtered path (0.01 m)", color: COLORS.adapted, target: "filtered-path" },
+    { label: "Cleaned area", color: "#267653", target: "cleaned-area" },
   ]);
 }
 
@@ -275,13 +371,13 @@ function renderGeometry(robot, gadget) {
   drawPolygon(svg, wrap, gadget, bounds, "cleaning gadget (base_link)", COLORS.gadget);
   drawBaseLink(svg, wrap, bounds);
   drawLegend(svg, [
-    { label: "robot footprint", color: COLORS.footprint },
-    { label: "cleaning gadget", color: COLORS.gadget },
-    { label: "base_link origin", color: COLORS.origin },
+    { label: "robot footprint", color: COLORS.footprint, target: "robot footprint (base_link)" },
+    { label: "cleaning gadget", color: COLORS.gadget, target: "cleaning gadget (base_link)" },
+    { label: "base_link origin", color: COLORS.origin, target: "base-link" },
   ]);
 }
 
-function renderHeadings(headings, adaptedHeadingVariants) {
+function renderHeadings(headings, subsampledHeadingEstimation) {
   const svg = document.querySelector("#heading-plot");
   const wrap = svg.parentElement;
   const series = [
@@ -290,14 +386,18 @@ function renderHeadings(headings, adaptedHeadingVariants) {
       color: COLORS.origin,
       headings,
     },
-    ...adaptedHeadingVariants.map((variant, index) => ({
-      label: `${variant.windowDistance} m window`,
-      color: COLORS.adapted[index % COLORS.adapted.length],
-      headings: variant.headings,
-    })),
+    {
+      label: "0.01 m subsampling, 0.03 m window",
+      color: COLORS.adapted,
+      headings: subsampledHeadingEstimation.headings,
+      values: subsampledHeadingEstimation.headings.map((heading, index) => ({
+        x: subsampledHeadingEstimation.waypointIndices[index],
+        y: heading,
+      })),
+    },
   ].map((item) => ({
     ...item,
-    values: item.headings.map((heading, index) => ({ x: index, y: heading })),
+    values: item.values ?? item.headings.map((heading, index) => ({ x: index, y: heading })),
   }));
   const bounds = {
     minX: -0.5,
@@ -305,11 +405,21 @@ function renderHeadings(headings, adaptedHeadingVariants) {
     minY: -Math.PI,
     maxY: Math.PI,
   };
-  drawAxes(svg, bounds, "waypoint index", "heading (rad)");
+  drawAxes(
+    svg,
+    bounds,
+    "waypoint index",
+    "heading (rad)",
+    (value) => String(Math.max(
+      0,
+      Math.min(Math.max(0, headings.length - 1), Math.round(value)),
+    )),
+  );
   svg.append(svgElement("text", { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 }, "Heading estimates · world frame"));
   for (const item of series) {
     if (item.values.length < 2) continue;
-    svg.append(svgElement("polyline", {
+    const group = createSeriesGroup(svg, item.label);
+    group.append(svgElement("polyline", {
       points: item.values.map((value) => {
         const pixel = mapPoint(value, bounds);
         return `${pixel.x},${pixel.y}`;
@@ -327,18 +437,22 @@ function renderHeadings(headings, adaptedHeadingVariants) {
       const radians = item.headings[index];
       const degrees = radians * 180 / Math.PI;
       addHoverPoint(
-        svg,
+        svg.querySelector(`[data-series="${item.label}"]`),
         wrap,
         { value, pixel },
-        `waypoint [${index}] ${item.label}`,
+        `waypoint [${value.x}] ${item.label}`,
         item.color,
         4,
         false,
-        `waypoint [${index}] ${item.label}: ${formatNumber(radians)} rad (${formatNumber(degrees)}°)`,
+        `waypoint [${value.x}] ${item.label}: ${formatNumber(radians)} rad (${formatNumber(degrees)}°)`,
       );
     });
   }
-  drawLegend(svg, series.map(({ label, color }) => ({ label, color })));
+  drawLegend(svg, series.map(({ label, color }) => ({
+    label,
+    color,
+    target: label,
+  })));
 }
 
 function validatePointData(data) {
@@ -359,10 +473,9 @@ function validatePointData(data) {
 }
 
 function validateAnalysisData(data, pathLength) {
-  const hasHeadingChanges = pathLength > 1;
-  const hasValidStatistics = (statistics) =>
+  const hasValidStatistics = (statistics, headingCount) =>
     statistics === null
-      ? !hasHeadingChanges
+      ? headingCount < 2
       : statistics &&
         typeof statistics === "object" &&
         ["minimum", "maximum", "mean"].every(
@@ -370,33 +483,40 @@ function validateAnalysisData(data, pathLength) {
             statistics[key] >= 0,
         );
   const waypointDistanceStatistics = data.waypoint_distance_statistics;
-  const search = data.subsampling_search;
-  const validSearch = search &&
-    Number.isFinite(search.maximum_allowed_heading_change) &&
-    Math.abs(search.maximum_allowed_heading_change - Math.PI / 6) < 1e-12 &&
-    Array.isArray(search.candidate_distances) &&
-    search.candidate_distances.length <= 10 &&
-    search.candidate_distances.every((distance, index, distances) =>
-      Number.isFinite(distance) && distance >= 0 &&
-      (index === 0 || distance > distances[index - 1]),
+  const subsampledEstimation = data.subsampled_heading_estimation;
+  const cleanedAreaGeometry = data.cleaned_area_geometry;
+  const validCleanedAreaGeometry = Array.isArray(cleanedAreaGeometry) &&
+    cleanedAreaGeometry.every((polygon) =>
+      Array.isArray(polygon) && polygon.length > 0 &&
+      polygon.every((ring) =>
+        Array.isArray(ring) && ring.length >= 4 &&
+        ring.every((point) =>
+          Array.isArray(point) && point.length === 2 &&
+          point.every(Number.isFinite),
+        ),
+      ),
+    );
+  const validSubsampledEstimation = subsampledEstimation &&
+    subsampledEstimation.minimum_waypoint_distance === 0.01 &&
+    subsampledEstimation.window_distance === 0.03 &&
+    Array.isArray(subsampledEstimation.waypoint_indices) &&
+    Array.isArray(subsampledEstimation.headings) &&
+    subsampledEstimation.waypoint_indices.length ===
+      subsampledEstimation.headings.length &&
+    subsampledEstimation.waypoint_indices.every(
+      (index, position, indices) =>
+        Number.isInteger(index) && index >= 0 && index < pathLength &&
+        (position === 0 || index > indices[position - 1]),
     ) &&
-    Array.isArray(search.qualifying_combinations) &&
-    search.qualifying_combinations.every((combination) =>
-      search.candidate_distances.includes(
-        combination.minimum_waypoint_distance,
-      ) &&
-      search.candidate_distances.includes(combination.window_distance) &&
-      Number.isInteger(combination.waypoint_count) &&
-      combination.waypoint_count >= 2 &&
-      combination.waypoint_count <= pathLength &&
-      Number.isFinite(combination.maximum_heading_change) &&
-      combination.maximum_heading_change >= 0 &&
-      combination.maximum_heading_change <
-        search.maximum_allowed_heading_change &&
-      Number.isFinite(combination.mean_heading_change) &&
-      combination.mean_heading_change >= 0,
+    subsampledEstimation.headings.every(Number.isFinite) &&
+    hasValidStatistics(
+      subsampledEstimation.heading_change_statistics,
+      subsampledEstimation.headings.length,
     );
   if (!Number.isFinite(data.path_length) ||
+      !Number.isFinite(data.cleaned_area) ||
+      data.cleaned_area < 0 ||
+      !validCleanedAreaGeometry ||
       !Array.isArray(data.headings) ||
       data.headings.length !== pathLength ||
       !data.headings.every(Number.isFinite) ||
@@ -405,45 +525,39 @@ function validateAnalysisData(data, pathLength) {
         (key) => Number.isFinite(waypointDistanceStatistics[key]) &&
           waypointDistanceStatistics[key] >= 0,
       ) ||
-      !hasValidStatistics(data.heading_change_statistics) ||
-      !validSearch ||
-      !Array.isArray(data.adapted_heading_variants) ||
-      data.adapted_heading_variants.length !== 3 ||
-      !data.adapted_heading_variants.every((variant, index) =>
-        Number.isFinite(variant.window_distance) &&
-        variant.window_distance === [0.01, 0.05, 0.1][index] &&
-        Array.isArray(variant.headings) &&
-        variant.headings.length === pathLength &&
-        variant.headings.every(Number.isFinite) &&
-        hasValidStatistics(variant.heading_change_statistics),
-      )) {
+      !hasValidStatistics(data.heading_change_statistics, pathLength) ||
+      !validSubsampledEstimation) {
     throw new Error("Invalid or missing C++-computed path length or headings.");
   }
   return {
     pathLength: data.path_length,
+    cleanedArea: data.cleaned_area,
+    cleanedAreaGeometry: cleanedAreaGeometry.map((polygon) =>
+      polygon.map((ring) => ring.map(([x, y]) => ({ x, y }))),
+    ),
     headings: data.headings,
     waypointDistanceStatistics,
-    subsamplingSearch: search,
     headingChangeStatistics: data.heading_change_statistics,
-    adaptedHeadingVariants: data.adapted_heading_variants.map((variant) => ({
-      windowDistance: variant.window_distance,
-      headings: variant.headings,
-      headingChangeStatistics: variant.heading_change_statistics,
-    })),
+    subsampledHeadingEstimation: {
+      waypointIndices: subsampledEstimation.waypoint_indices,
+      headings: subsampledEstimation.headings,
+      headingChangeStatistics:
+        subsampledEstimation.heading_change_statistics,
+    },
   };
 }
 
-function renderHeadingChangeStatistics(statistics, variants) {
+function renderHeadingChangeStatistics(statistics, subsampledEstimation) {
   const section = document.querySelector("#heading-change-summary");
   const rows = [
     {
       label: "Original headings",
       statistics,
     },
-    ...variants.map((variant) => ({
-      label: `${variant.windowDistance} m window`,
-      statistics: variant.headingChangeStatistics,
-    })),
+    {
+      label: "0.01 m subsampling, 0.03 m window",
+      statistics: subsampledEstimation.headingChangeStatistics,
+    },
   ];
   const body = section.querySelector("tbody");
   for (const row of rows) {
@@ -481,35 +595,6 @@ function renderWaypointDistanceStatistics(statistics) {
   section.hidden = false;
 }
 
-function renderSubsamplingSearch(search) {
-  const section = document.querySelector("#subsampling-search-summary");
-  const body = section.querySelector("tbody");
-  if (search.qualifying_combinations.length === 0) {
-    const row = document.createElement("tr");
-    const cell = document.createElement("td");
-    cell.colSpan = 4;
-    cell.textContent = "No qualifying combinations found.";
-    row.append(cell);
-    body.append(row);
-  } else {
-    for (const combination of search.qualifying_combinations) {
-      const row = document.createElement("tr");
-      for (const value of [
-        `${combination.minimum_waypoint_distance.toPrecision(6)} m`,
-        `${combination.window_distance.toPrecision(6)} m`,
-        combination.waypoint_count,
-        `${(combination.maximum_heading_change * 180 / Math.PI).toPrecision(6)}°`,
-      ]) {
-        const cell = document.createElement("td");
-        cell.textContent = String(value);
-        row.append(cell);
-      }
-      body.append(row);
-    }
-  }
-  section.hidden = false;
-}
-
 Promise.all([
   fetch("../data/short.json").then((response) => {
     if (!response.ok) {
@@ -532,18 +617,26 @@ Promise.all([
     };
   })
   .then((data) => {
-    renderPath(data.path);
+    renderPath(
+      data.path,
+      data.subsampledHeadingEstimation.waypointIndices,
+      data.cleanedAreaGeometry,
+    );
     renderGeometry(data.robot, data.cleaningGadget);
-    renderHeadings(data.headings, data.adaptedHeadingVariants);
+    renderHeadings(data.headings, data.subsampledHeadingEstimation);
     renderHeadingChangeStatistics(
       data.headingChangeStatistics,
-      data.adaptedHeadingVariants,
+      data.subsampledHeadingEstimation,
     );
     renderWaypointDistanceStatistics(data.waypointDistanceStatistics);
-    renderSubsamplingSearch(data.subsamplingSearch);
     const pathLength = document.querySelector("#path-length");
-    pathLength.textContent = `Path length: ${formatNumber(data.pathLength)} m`;
+    pathLength.textContent =
+      `Filtered path length: ${formatNumber(data.pathLength)} m`;
     pathLength.hidden = false;
+    const cleanedArea = document.querySelector("#cleaned-area");
+    cleanedArea.textContent =
+      `Calculated cleaned area: ${formatNumber(data.cleanedArea)} m²`;
+    cleanedArea.hidden = false;
     setStatus("");
   })
   .catch((error) => {

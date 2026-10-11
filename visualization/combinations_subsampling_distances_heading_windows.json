@@ -1,0 +1,339 @@
+{
+  "maximum_allowed_heading_change": 0.52359877559829882,
+  "candidate_distances": [
+    0.0001100503870260052,
+    0.0016985057586604126,
+    0.013597777861242888,
+    0.025304783532488162,
+    0.030744369996732839,
+    0.038514801195475443,
+    0.056621007503640644,
+    0.20257325251498892,
+    0.21356735406081057,
+    0.23203300226632984
+  ],
+  "qualifying_combinations": [
+    {
+      "minimum_waypoint_distance": 0.013597777861242888,
+      "window_distance": 0.0001100503870260052,
+      "waypoint_count": 129,
+      "maximum_heading_change": 0.31938605958145072,
+      "mean_heading_change": 0.058302623388408775
+    },
+    {
+      "minimum_waypoint_distance": 0.013597777861242888,
+      "window_distance": 0.0016985057586604126,
+      "waypoint_count": 129,
+      "maximum_heading_change": 0.31938605958145072,
+      "mean_heading_change": 0.058302623388408775
+    },
+    {
+      "minimum_waypoint_distance": 0.013597777861242888,
+      "window_distance": 0.013597777861242888,
+      "waypoint_count": 129,
+      "maximum_heading_change": 0.31938605958145072,
+      "mean_heading_change": 0.058302623388408775
+    },
+    {
+      "minimum_waypoint_distance": 0.013597777861242888,
+      "window_distance": 0.025304783532488162,
+      "waypoint_count": 129,
+      "maximum_heading_change": 0.31938605958145072,
+      "mean_heading_change": 0.058072186031127765
+    },
+    {
+      "minimum_waypoint_distance": 0.013597777861242888,
+      "window_distance": 0.030744369996732839,
+      "waypoint_count": 129,
+      "maximum_heading_change": 0.31938605958145072,
+      "mean_heading_change": 0.058072186031127765
+    },
+    {
+      "minimum_waypoint_distance": 0.013597777861242888,
+      "window_distance": 0.038514801195475443,
+      "waypoint_count": 129,
+      "maximum_heading_change": 0.28663854845605619,
+      "mean_heading_change": 0.059004313510075221
+    },
+    {
+      "minimum_waypoint_distance": 0.013597777861242888,
+      "window_distance": 0.056621007503640644,
+      "waypoint_count": 129,
+      "maximum_heading_change": 0.28663854845605619,
+      "mean_heading_change": 0.05898030597168212
+    },
+    {
+      "minimum_waypoint_distance": 0.025304783532488162,
+      "window_distance": 0.0001100503870260052,
+      "waypoint_count": 117,
+      "maximum_heading_change": 0.27899885272750158,
+      "mean_heading_change": 0.063191284033441042
+    },
+    {
+      "minimum_waypoint_distance": 0.025304783532488162,
+      "window_distance": 0.0016985057586604126,
+      "waypoint_count": 117,
+      "maximum_heading_change": 0.27899885272750158,
+      "mean_heading_change": 0.063191284033441042
+    },
+    {
+      "minimum_waypoint_distance": 0.025304783532488162,
+      "window_distance": 0.013597777861242888,
+      "waypoint_count": 117,
+      "maximum_heading_change": 0.27899885272750158,
+      "mean_heading_change": 0.063191284033441042
+    },
+    {
+      "minimum_waypoint_distance": 0.025304783532488162,
+      "window_distance": 0.025304783532488162,
+      "waypoint_count": 117,
+      "maximum_heading_change": 0.27899885272750158,
+      "mean_heading_change": 0.063191284033441042
+    },
+    {
+      "minimum_waypoint_distance": 0.025304783532488162,
+      "window_distance": 0.030744369996732839,
+      "waypoint_count": 117,
+      "maximum_heading_change": 0.27899885272750158,
+      "mean_heading_change": 0.061762061155085757
+    },
+    {
+      "minimum_waypoint_distance": 0.025304783532488162,
+      "window_distance": 0.038514801195475443,
+      "waypoint_count": 117,
+      "maximum_heading_change": 0.27899885272750158,
+      "mean_heading_change": 0.061762061155085757
+    },
+    {
+      "minimum_waypoint_distance": 0.025304783532488162,
+      "window_distance": 0.056621007503640644,
+      "waypoint_count": 117,
+      "maximum_heading_change": 0.27899885272750158,
+      "mean_heading_change": 0.060822116283853436
+    },
+    {
+      "minimum_waypoint_distance": 0.025304783532488162,
+      "window_distance": 0.20257325251498892,
+      "waypoint_count": 117,
+      "maximum_heading_change": 0.50452059883779066,
+      "mean_heading_change": 0.064415215338637768
+    },
+    {
+      "minimum_waypoint_distance": 0.025304783532488162,
+      "window_distance": 0.21356735406081057,
+      "waypoint_count": 117,
+      "maximum_heading_change": 0.50452059883779066,
+      "mean_heading_change": 0.064415215338637768
+    },
+    {
+      "minimum_waypoint_distance": 0.030744369996732839,
+      "window_distance": 0.0001100503870260052,
+      "waypoint_count": 108,
+      "maximum_heading_change": 0.30000607472485785,
+      "mean_heading_change": 0.068896020756843007
+    },
+    {
+      "minimum_waypoint_distance": 0.030744369996732839,
+      "window_distance": 0.0016985057586604126,
+      "waypoint_count": 108,
+      "maximum_heading_change": 0.30000607472485785,
+      "mean_heading_change": 0.068896020756843007
+    },
+    {
+      "minimum_waypoint_distance": 0.030744369996732839,
+      "window_distance": 0.013597777861242888,
+      "waypoint_count": 108,
+      "maximum_heading_change": 0.30000607472485785,
+      "mean_heading_change": 0.068896020756843007
+    },
+    {
+      "minimum_waypoint_distance": 0.030744369996732839,
+      "window_distance": 0.025304783532488162,
+      "waypoint_count": 108,
+      "maximum_heading_change": 0.30000607472485785,
+      "mean_heading_change": 0.068896020756843007
+    },
+    {
+      "minimum_waypoint_distance": 0.030744369996732839,
+      "window_distance": 0.030744369996732839,
+      "waypoint_count": 108,
+      "maximum_heading_change": 0.30000607472485785,
+      "mean_heading_change": 0.068896020756843007
+    },
+    {
+      "minimum_waypoint_distance": 0.030744369996732839,
+      "window_distance": 0.038514801195475443,
+      "waypoint_count": 108,
+      "maximum_heading_change": 0.30000607472485785,
+      "mean_heading_change": 0.066217155818001361
+    },
+    {
+      "minimum_waypoint_distance": 0.030744369996732839,
+      "window_distance": 0.056621007503640644,
+      "waypoint_count": 108,
+      "maximum_heading_change": 0.30000607472485785,
+      "mean_heading_change": 0.065198150163207444
+    },
+    {
+      "minimum_waypoint_distance": 0.030744369996732839,
+      "window_distance": 0.20257325251498892,
+      "waypoint_count": 108,
+      "maximum_heading_change": 0.42535717737399087,
+      "mean_heading_change": 0.068353627442564333
+    },
+    {
+      "minimum_waypoint_distance": 0.030744369996732839,
+      "window_distance": 0.21356735406081057,
+      "waypoint_count": 108,
+      "maximum_heading_change": 0.42535717737399087,
+      "mean_heading_change": 0.068353627442564319
+    },
+    {
+      "minimum_waypoint_distance": 0.030744369996732839,
+      "window_distance": 0.23203300226632984,
+      "waypoint_count": 108,
+      "maximum_heading_change": 0.51958612859442521,
+      "mean_heading_change": 0.069515649694246243
+    },
+    {
+      "minimum_waypoint_distance": 0.038514801195475443,
+      "window_distance": 0.0001100503870260052,
+      "waypoint_count": 98,
+      "maximum_heading_change": 0.27728103082811523,
+      "mean_heading_change": 0.072036940754314022
+    },
+    {
+      "minimum_waypoint_distance": 0.038514801195475443,
+      "window_distance": 0.0016985057586604126,
+      "waypoint_count": 98,
+      "maximum_heading_change": 0.27728103082811523,
+      "mean_heading_change": 0.072036940754314022
+    },
+    {
+      "minimum_waypoint_distance": 0.038514801195475443,
+      "window_distance": 0.013597777861242888,
+      "waypoint_count": 98,
+      "maximum_heading_change": 0.27728103082811523,
+      "mean_heading_change": 0.072036940754314022
+    },
+    {
+      "minimum_waypoint_distance": 0.038514801195475443,
+      "window_distance": 0.025304783532488162,
+      "waypoint_count": 98,
+      "maximum_heading_change": 0.27728103082811523,
+      "mean_heading_change": 0.072036940754314022
+    },
+    {
+      "minimum_waypoint_distance": 0.038514801195475443,
+      "window_distance": 0.030744369996732839,
+      "waypoint_count": 98,
+      "maximum_heading_change": 0.27728103082811523,
+      "mean_heading_change": 0.072036940754314022
+    },
+    {
+      "minimum_waypoint_distance": 0.038514801195475443,
+      "window_distance": 0.038514801195475443,
+      "waypoint_count": 98,
+      "maximum_heading_change": 0.27728103082811523,
+      "mean_heading_change": 0.072036940754314022
+    },
+    {
+      "minimum_waypoint_distance": 0.038514801195475443,
+      "window_distance": 0.056621007503640644,
+      "waypoint_count": 98,
+      "maximum_heading_change": 0.27728103082811523,
+      "mean_heading_change": 0.069288154157699122
+    },
+    {
+      "minimum_waypoint_distance": 0.038514801195475443,
+      "window_distance": 0.20257325251498892,
+      "waypoint_count": 98,
+      "maximum_heading_change": 0.30968602670912299,
+      "mean_heading_change": 0.073398670827438589
+    },
+    {
+      "minimum_waypoint_distance": 0.038514801195475443,
+      "window_distance": 0.21356735406081057,
+      "waypoint_count": 98,
+      "maximum_heading_change": 0.41070787145364313,
+      "mean_heading_change": 0.074440133144392392
+    },
+    {
+      "minimum_waypoint_distance": 0.038514801195475443,
+      "window_distance": 0.23203300226632984,
+      "waypoint_count": 98,
+      "maximum_heading_change": 0.41070787145364313,
+      "mean_heading_change": 0.07475051901768652
+    },
+    {
+      "minimum_waypoint_distance": 0.056621007503640644,
+      "window_distance": 0.0001100503870260052,
+      "waypoint_count": 85,
+      "maximum_heading_change": 0.33689275519936357,
+      "mean_heading_change": 0.0822561955871325
+    },
+    {
+      "minimum_waypoint_distance": 0.056621007503640644,
+      "window_distance": 0.0016985057586604126,
+      "waypoint_count": 85,
+      "maximum_heading_change": 0.33689275519936357,
+      "mean_heading_change": 0.0822561955871325
+    },
+    {
+      "minimum_waypoint_distance": 0.056621007503640644,
+      "window_distance": 0.013597777861242888,
+      "waypoint_count": 85,
+      "maximum_heading_change": 0.33689275519936357,
+      "mean_heading_change": 0.0822561955871325
+    },
+    {
+      "minimum_waypoint_distance": 0.056621007503640644,
+      "window_distance": 0.025304783532488162,
+      "waypoint_count": 85,
+      "maximum_heading_change": 0.33689275519936357,
+      "mean_heading_change": 0.0822561955871325
+    },
+    {
+      "minimum_waypoint_distance": 0.056621007503640644,
+      "window_distance": 0.030744369996732839,
+      "waypoint_count": 85,
+      "maximum_heading_change": 0.33689275519936357,
+      "mean_heading_change": 0.0822561955871325
+    },
+    {
+      "minimum_waypoint_distance": 0.056621007503640644,
+      "window_distance": 0.038514801195475443,
+      "waypoint_count": 85,
+      "maximum_heading_change": 0.33689275519936357,
+      "mean_heading_change": 0.0822561955871325
+    },
+    {
+      "minimum_waypoint_distance": 0.056621007503640644,
+      "window_distance": 0.056621007503640644,
+      "waypoint_count": 85,
+      "maximum_heading_change": 0.33689275519936357,
+      "mean_heading_change": 0.0822561955871325
+    },
+    {
+      "minimum_waypoint_distance": 0.056621007503640644,
+      "window_distance": 0.20257325251498892,
+      "waypoint_count": 85,
+      "maximum_heading_change": 0.3020222027476781,
+      "mean_heading_change": 0.082107975980914877
+    },
+    {
+      "minimum_waypoint_distance": 0.056621007503640644,
+      "window_distance": 0.21356735406081057,
+      "waypoint_count": 85,
+      "maximum_heading_change": 0.3020222027476781,
+      "mean_heading_change": 0.082107975980914877
+    },
+    {
+      "minimum_waypoint_distance": 0.056621007503640644,
+      "window_distance": 0.23203300226632984,
+      "waypoint_count": 85,
+      "maximum_heading_change": 0.3020222027476781,
+      "mean_heading_change": 0.082107975980914877
+    }
+  ]
+}
