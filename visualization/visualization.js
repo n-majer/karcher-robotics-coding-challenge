@@ -370,6 +370,32 @@ function validateAnalysisData(data, pathLength) {
             statistics[key] >= 0,
         );
   const waypointDistanceStatistics = data.waypoint_distance_statistics;
+  const search = data.subsampling_search;
+  const validSearch = search &&
+    Number.isFinite(search.maximum_allowed_heading_change) &&
+    Math.abs(search.maximum_allowed_heading_change - Math.PI / 6) < 1e-12 &&
+    Array.isArray(search.candidate_distances) &&
+    search.candidate_distances.length <= 10 &&
+    search.candidate_distances.every((distance, index, distances) =>
+      Number.isFinite(distance) && distance >= 0 &&
+      (index === 0 || distance > distances[index - 1]),
+    ) &&
+    Array.isArray(search.qualifying_combinations) &&
+    search.qualifying_combinations.every((combination) =>
+      search.candidate_distances.includes(
+        combination.minimum_waypoint_distance,
+      ) &&
+      search.candidate_distances.includes(combination.window_distance) &&
+      Number.isInteger(combination.waypoint_count) &&
+      combination.waypoint_count >= 2 &&
+      combination.waypoint_count <= pathLength &&
+      Number.isFinite(combination.maximum_heading_change) &&
+      combination.maximum_heading_change >= 0 &&
+      combination.maximum_heading_change <
+        search.maximum_allowed_heading_change &&
+      Number.isFinite(combination.mean_heading_change) &&
+      combination.mean_heading_change >= 0,
+    );
   if (!Number.isFinite(data.path_length) ||
       !Array.isArray(data.headings) ||
       data.headings.length !== pathLength ||
@@ -380,6 +406,7 @@ function validateAnalysisData(data, pathLength) {
           waypointDistanceStatistics[key] >= 0,
       ) ||
       !hasValidStatistics(data.heading_change_statistics) ||
+      !validSearch ||
       !Array.isArray(data.adapted_heading_variants) ||
       data.adapted_heading_variants.length !== 3 ||
       !data.adapted_heading_variants.every((variant, index) =>
@@ -396,6 +423,7 @@ function validateAnalysisData(data, pathLength) {
     pathLength: data.path_length,
     headings: data.headings,
     waypointDistanceStatistics,
+    subsamplingSearch: search,
     headingChangeStatistics: data.heading_change_statistics,
     adaptedHeadingVariants: data.adapted_heading_variants.map((variant) => ({
       windowDistance: variant.window_distance,
@@ -453,6 +481,35 @@ function renderWaypointDistanceStatistics(statistics) {
   section.hidden = false;
 }
 
+function renderSubsamplingSearch(search) {
+  const section = document.querySelector("#subsampling-search-summary");
+  const body = section.querySelector("tbody");
+  if (search.qualifying_combinations.length === 0) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 4;
+    cell.textContent = "No qualifying combinations found.";
+    row.append(cell);
+    body.append(row);
+  } else {
+    for (const combination of search.qualifying_combinations) {
+      const row = document.createElement("tr");
+      for (const value of [
+        `${combination.minimum_waypoint_distance.toPrecision(6)} m`,
+        `${combination.window_distance.toPrecision(6)} m`,
+        combination.waypoint_count,
+        `${(combination.maximum_heading_change * 180 / Math.PI).toPrecision(6)}°`,
+      ]) {
+        const cell = document.createElement("td");
+        cell.textContent = String(value);
+        row.append(cell);
+      }
+      body.append(row);
+    }
+  }
+  section.hidden = false;
+}
+
 Promise.all([
   fetch("../data/short.json").then((response) => {
     if (!response.ok) {
@@ -483,6 +540,7 @@ Promise.all([
       data.adaptedHeadingVariants,
     );
     renderWaypointDistanceStatistics(data.waypointDistanceStatistics);
+    renderSubsamplingSearch(data.subsamplingSearch);
     const pathLength = document.querySelector("#path-length");
     pathLength.textContent = `Path length: ${formatNumber(data.pathLength)} m`;
     pathLength.hidden = false;

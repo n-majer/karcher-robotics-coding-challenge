@@ -1,5 +1,6 @@
 #include "data_analysis/robot_data.hpp"
 
+#include <cmath>
 #include <exception>
 #include <iomanip>
 #include <iostream>
@@ -51,6 +52,23 @@ int main(int argc, char* argv[]) {
             std::cout << "  Minimum: " << statistics.minimum << '\n'
                       << "  Maximum: " << statistics.maximum << '\n'
                       << "  Mean:    " << statistics.mean << '\n';
+        }
+        const auto& search = robot_data.subsampling_search;
+        std::cout << "Subsampling/window combinations with maximum heading "
+                     "change below 30 degrees:\n";
+        if (search.qualifying_combinations.empty()) {
+            std::cout << "  None found among " << search.candidate_distances.size()
+                      << " candidate distances.\n";
+        }
+        for (const auto& combination : search.qualifying_combinations) {
+            std::cout << "  Subsample >= "
+                      << combination.minimum_waypoint_distance
+                      << " m; heading window >= " << combination.window_distance
+                      << " m; " << combination.waypoint_count
+                      << " waypoints; maximum change "
+                      << combination.heading_change_statistics.maximum *
+                             180.0 / std::acos(-1.0)
+                      << " degrees.\n";
         }
     } catch (const std::exception& error) {
         std::cerr << "Failed to read '" << input_path << "': " << error.what()

@@ -70,6 +70,8 @@ Since the distances between the measured waypoints in the recorded data of the r
 
 For adapted heading estimations, target neighbor distances of 0.01, 0.05, and 0.1 m are tested. For each interior waypoint $p_i$, the algorithm expands a pair of neighbors symmetrically by waypoint index until the Euclidean distance between the pair reaches the target, then estimates the heading from that pair. At the first and last waypoint, a one-sided window is used. If a target cannot be reached with available waypoints, the largest available window is used. The heading plot overlays all three adapted series with the original estimates. The visualization shows the minimum, maximum, and mean absolute change between consecutive headings for the original and each adapted series.
 
+The C++ analysis also derives ten evenly spaced quantile thresholds from the recorded consecutive waypoint distances. For every pair of candidate thresholds, it greedily subsamples the path by retaining a waypoint only when it is at least the chosen minimum distance from the last retained waypoint, then estimates headings on that subsampled path using the chosen heading window. Combinations whose largest wrap-aware absolute change between consecutive headings is below 30 degrees are reported in the terminal, saved to `visualization/analysis.json`, and shown in the visualization.
+
 ## Assumptions
 
 - I assume that the robot drove with constant heading in a straight line between two consecutive waypoints of the path.

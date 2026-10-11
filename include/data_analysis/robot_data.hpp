@@ -29,6 +29,19 @@ struct HeadingEstimationVariant {
     std::optional<WaypointDistanceStatistics> heading_change_statistics;
 };
 
+struct SubsamplingCombination {
+    double minimum_waypoint_distance;
+    double window_distance;
+    std::size_t waypoint_count;
+    WaypointDistanceStatistics heading_change_statistics;
+};
+
+struct SubsamplingSearch {
+    double maximum_allowed_heading_change;
+    std::vector<double> candidate_distances;
+    std::vector<SubsamplingCombination> qualifying_combinations;
+};
+
 struct RobotData {
     std::vector<Point2D> robot_waypoints;
     std::vector<Point2D> robot_footprint;
@@ -39,6 +52,7 @@ struct RobotData {
     std::vector<HeadingEstimationVariant> adapted_heading_variants;
     std::vector<double> waypoint_distances;
     std::optional<WaypointDistanceStatistics> waypoint_distance_statistics;
+    SubsamplingSearch subsampling_search;
 };
 
 RobotData read_robot_data(const std::filesystem::path& json_file);

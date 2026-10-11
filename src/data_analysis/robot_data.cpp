@@ -9,6 +9,7 @@
 #include <numeric>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 #include <boost/lexical_cast.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -88,6 +89,112 @@ std::optional<WaypointDistanceStatistics> calculate_heading_change_statistics(
     return calculate_distance_statistics(changes);
 }
 
+std::pair<std::vector<double>, std::vector<double>> estimate_headings(
+    const std::vector<Point2D>& waypoints,
+    double window_distance) {
+    std::vector<double> headings;
+    std::vector<double> distances;
+    headings.reserve(waypoints.size());
+    if (waypoints.size() > 1) {
+        distances.reserve(waypoints.size());
+    }
+
+    for (std::size_t index = 0; index < waypoints.size(); ++index) {
+        if (waypoints.size() < 2) {
+            headings.push_back(0.0);
+            continue;
+        }
+
+        std::size_t left_index = index;
+        std::size_t right_index = index;
+        if (index == 0) {
+            right_index = 1;
+            while (right_index + 1 < waypoints.size() &&
+                   std::hypot(waypoints[right_index].x - waypoints[index].x,
+                              waypoints[right_index].y - waypoints[index].y) <
+                       window_distance) {
+                ++right_index;
+            }
+        } else if (index == waypoints.size() - 1) {
+            left_index = index - 1;
+            while (left_index > 0 &&
+                   std::hypot(waypoints[index].x - waypoints[left_index].x,
+                              waypoints[index].y - waypoints[left_index].y) <
+                       window_distance) {
+                --left_index;
+            }
+        } else {
+            const std::size_t max_offset =
+                std::min(index, waypoints.size() - 1 - index);
+            std::size_t offset = 1;
+            for (; offset < max_offset; ++offset) {
+                const Point2D& left = waypoints[index - offset];
+                const Point2D& right = waypoints[index + offset];
+                if (std::hypot(right.x - left.x, right.y - left.y) >=
+                    window_distance) {
+                    break;
+                }
+            }
+            left_index = index - offset;
+            right_index = index + offset;
+        }
+
+        const Point2D& left = waypoints[left_index];
+        const Point2D& right = waypoints[right_index];
+        headings.push_back(std::atan2(right.y - left.y, right.x - left.x));
+        distances.push_back(std::hypot(right.x - left.x, right.y - left.y));
+    }
+    return {std::move(headings), std::move(distances)};
+}
+
+std::vector<double> derive_distance_candidates(
+    const std::vector<double>& waypoint_distances) {
+    constexpr std::size_t candidate_count = 10;
+    if (waypoint_distances.empty()) {
+        return {};
+    }
+
+    std::vector<double> sorted_distances = waypoint_distances;
+    std::sort(sorted_distances.begin(), sorted_distances.end());
+    std::vector<double> candidates;
+    candidates.reserve(candidate_count);
+    for (std::size_t index = 0; index < candidate_count; ++index) {
+        const double position =
+            static_cast<double>(index) * (sorted_distances.size() - 1) /
+            static_cast<double>(candidate_count - 1);
+        const auto lower_index = static_cast<std::size_t>(position);
+        const auto upper_index = std::min(lower_index + 1,
+                                          sorted_distances.size() - 1);
+        const double fraction = position - static_cast<double>(lower_index);
+        const double candidate =
+            sorted_distances[lower_index] +
+            (sorted_distances[upper_index] - sorted_distances[lower_index]) *
+                fraction;
+        if (candidates.empty() || candidate != candidates.back()) {
+            candidates.push_back(candidate);
+        }
+    }
+    return candidates;
+}
+
+std::vector<Point2D> subsample_path(const std::vector<Point2D>& waypoints,
+                                    double minimum_distance) {
+    std::vector<Point2D> subsampled;
+    if (waypoints.empty()) {
+        return subsampled;
+    }
+    subsampled.reserve(waypoints.size());
+    subsampled.push_back(waypoints.front());
+    for (std::size_t index = 1; index < waypoints.size(); ++index) {
+        const Point2D& last_kept = subsampled.back();
+        if (std::hypot(waypoints[index].x - last_kept.x,
+                       waypoints[index].y - last_kept.y) >= minimum_distance) {
+            subsampled.push_back(waypoints[index]);
+        }
+    }
+    return subsampled;
+}
+
 void calculate_path_metrics(RobotData& robot_data) {
     const auto& waypoints = robot_data.robot_waypoints;
     robot_data.headings.clear();
@@ -97,12 +204,6 @@ void calculate_path_metrics(RobotData& robot_data) {
     for (double window : heading_distance_windows) {
         robot_data.adapted_heading_variants.push_back(
             HeadingEstimationVariant{window, {}, {}, std::nullopt, std::nullopt});
-        robot_data.adapted_heading_variants.back().headings.reserve(
-            waypoints.size());
-        if (waypoints.size() > 1) {
-            robot_data.adapted_heading_variants.back().distances.reserve(
-                waypoints.size());
-        }
     }
     robot_data.waypoint_distances.clear();
     if (waypoints.size() > 1) {
@@ -134,50 +235,13 @@ void calculate_path_metrics(RobotData& robot_data) {
         robot_data.headings.push_back(
             is_last ? std::atan2(-dy, -dx) : std::atan2(dy, dx));
 
-        for (auto& variant : robot_data.adapted_heading_variants) {
-            std::size_t left_index = index;
-            std::size_t right_index = index;
-            if (index == 0) {
-                right_index = index + 1;
-                while (right_index + 1 < waypoints.size() &&
-                       std::hypot(
-                           waypoints[right_index].x - waypoints[index].x,
-                           waypoints[right_index].y - waypoints[index].y) <
-                           variant.window_distance) {
-                    ++right_index;
-                }
-            } else if (is_last) {
-                left_index = index - 1;
-                while (left_index > 0 &&
-                       std::hypot(
-                           waypoints[index].x - waypoints[left_index].x,
-                           waypoints[index].y - waypoints[left_index].y) <
-                           variant.window_distance) {
-                    --left_index;
-                }
-            } else {
-                const std::size_t max_offset =
-                    std::min(index, waypoints.size() - 1 - index);
-                std::size_t offset = 1;
-                for (; offset < max_offset; ++offset) {
-                    const Point2D& left = waypoints[index - offset];
-                    const Point2D& right = waypoints[index + offset];
-                    if (std::hypot(right.x - left.x, right.y - left.y) >=
-                        variant.window_distance) {
-                        break;
-                    }
-                }
-                left_index = index - offset;
-                right_index = index + offset;
-            }
+    }
 
-            const Point2D& left = waypoints[left_index];
-            const Point2D& right = waypoints[right_index];
-            variant.headings.push_back(
-                std::atan2(right.y - left.y, right.x - left.x));
-            variant.distances.push_back(
-                std::hypot(right.x - left.x, right.y - left.y));
-        }
+    for (auto& variant : robot_data.adapted_heading_variants) {
+        auto [headings, distances] =
+            estimate_headings(waypoints, variant.window_distance);
+        variant.headings = std::move(headings);
+        variant.distances = std::move(distances);
     }
 
     if (!robot_data.waypoint_distances.empty()) {
@@ -197,6 +261,31 @@ void calculate_path_metrics(RobotData& robot_data) {
     }
     robot_data.heading_change_statistics =
         calculate_heading_change_statistics(robot_data.headings);
+
+    robot_data.subsampling_search.maximum_allowed_heading_change =
+        std::acos(-1.0) / 6.0;
+    robot_data.subsampling_search.candidate_distances =
+        derive_distance_candidates(robot_data.waypoint_distances);
+    robot_data.subsampling_search.qualifying_combinations.clear();
+    for (double minimum_distance :
+         robot_data.subsampling_search.candidate_distances) {
+        const auto subsampled = subsample_path(waypoints, minimum_distance);
+        for (double window_distance :
+             robot_data.subsampling_search.candidate_distances) {
+            auto [headings, distances] =
+                estimate_headings(subsampled, window_distance);
+            const auto statistics =
+                calculate_heading_change_statistics(headings);
+            if (statistics &&
+                statistics->maximum <
+                    robot_data.subsampling_search
+                        .maximum_allowed_heading_change) {
+                robot_data.subsampling_search.qualifying_combinations.push_back(
+                    {minimum_distance, window_distance, subsampled.size(),
+                     *statistics});
+            }
+        }
+    }
 }
 
 }  // namespace
@@ -315,7 +404,38 @@ void write_visualization_data(const RobotData& robot_data,
     } else {
         output << "null";
     }
-    output << "\n}\n";
+    output << ",\n  \"subsampling_search\": {\n"
+           << "    \"maximum_allowed_heading_change\": "
+           << robot_data.subsampling_search.maximum_allowed_heading_change
+           << ",\n    \"candidate_distances\": [";
+    for (std::size_t index = 0;
+         index < robot_data.subsampling_search.candidate_distances.size();
+         ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        output << robot_data.subsampling_search.candidate_distances[index];
+    }
+    output << "],\n    \"qualifying_combinations\": [";
+    for (std::size_t index = 0;
+         index <
+         robot_data.subsampling_search.qualifying_combinations.size();
+         ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto& combination =
+            robot_data.subsampling_search.qualifying_combinations[index];
+        output << "\n      { \"minimum_waypoint_distance\": "
+               << combination.minimum_waypoint_distance
+               << ", \"window_distance\": " << combination.window_distance
+               << ", \"waypoint_count\": " << combination.waypoint_count
+               << ", \"maximum_heading_change\": "
+               << combination.heading_change_statistics.maximum
+               << ", \"mean_heading_change\": "
+               << combination.heading_change_statistics.mean << " }";
+    }
+    output << "\n    ]\n  }\n}\n";
 
     if (!output) {
         throw std::runtime_error("failed to write output file '" +
