@@ -14,6 +14,7 @@ const COLORS = {
   start: "#16834a",
   goal: "#c4373f",
   origin: "#7951a1",
+  adapted: ["#d07b24", "#168c87", "#b34a9b"],
   xAxis: "#c4373f",
   yAxis: "#21834b",
 };
@@ -254,7 +255,7 @@ function renderPath(waypoints) {
   const svg = document.querySelector("#path-plot");
   const wrap = svg.parentElement;
   const bounds = getBounds([waypoints]);
-  drawAxes(svg, bounds, "x (world frame, m)", "y (world frame, m)");
+  drawAxes(svg, bounds, "x (m)", "y (m)");
   svg.append(svgElement("text", { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 }, "Robot path · world frame"));
   drawPath(svg, wrap, waypoints, bounds);
   drawLegend(svg, [
@@ -268,7 +269,7 @@ function renderGeometry(robot, gadget) {
   const svg = document.querySelector("#geometry-plot");
   const wrap = svg.parentElement;
   const bounds = getBounds([robot, gadget], true);
-  drawAxes(svg, bounds, "x (base_link, m)", "y (base_link, m)");
+  drawAxes(svg, bounds, "x (m)", "y (m)");
   svg.append(svgElement("text", { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 }, "Robot footprint and cleaning gadget"));
   drawPolygon(svg, wrap, robot, bounds, "robot footprint (base_link)", COLORS.footprint, true);
   drawPolygon(svg, wrap, gadget, bounds, "cleaning gadget (base_link)", COLORS.gadget);
@@ -280,10 +281,24 @@ function renderGeometry(robot, gadget) {
   ]);
 }
 
-function renderHeadings(headings) {
+function renderHeadings(headings, adaptedHeadingVariants) {
   const svg = document.querySelector("#heading-plot");
   const wrap = svg.parentElement;
-  const values = headings.map((heading, index) => ({ x: index, y: heading }));
+  const series = [
+    {
+      label: "initial",
+      color: COLORS.origin,
+      headings,
+    },
+    ...adaptedHeadingVariants.map((variant, index) => ({
+      label: `${variant.windowDistance} m window`,
+      color: COLORS.adapted[index % COLORS.adapted.length],
+      headings: variant.headings,
+    })),
+  ].map((item) => ({
+    ...item,
+    values: item.headings.map((heading, index) => ({ x: index, y: heading })),
+  }));
   const bounds = {
     minX: -0.5,
     maxX: Math.max(0.5, headings.length - 0.5),
@@ -291,36 +306,39 @@ function renderHeadings(headings) {
     maxY: Math.PI,
   };
   drawAxes(svg, bounds, "waypoint index", "heading (rad)");
-  svg.append(svgElement("text", { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 }, "Heading by waypoint · world frame"));
-  if (values.length > 1) {
+  svg.append(svgElement("text", { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 }, "Heading estimates · world frame"));
+  for (const item of series) {
+    if (item.values.length < 2) continue;
     svg.append(svgElement("polyline", {
-      points: values.map((value) => {
+      points: item.values.map((value) => {
         const pixel = mapPoint(value, bounds);
         return `${pixel.x},${pixel.y}`;
       }).join(" "),
       fill: "none",
-      stroke: COLORS.origin,
+      stroke: item.color,
       "stroke-width": 2,
       "stroke-linejoin": "round",
       "stroke-linecap": "round",
     }));
   }
-  values.forEach((value, index) => {
-    const pixel = mapPoint(value, bounds);
-    const radians = headings[index];
-    const degrees = radians * 180 / Math.PI;
-    addHoverPoint(
-      svg,
-      wrap,
-      { value, pixel },
-      `waypoint [${index}] heading`,
-      COLORS.origin,
-      4,
-      false,
-      `waypoint [${index}] heading: ${formatNumber(radians)} rad (${formatNumber(degrees)}°)`,
-    );
-  });
-  drawLegend(svg, [{ label: "heading", color: COLORS.origin }]);
+  for (const item of series) {
+    item.values.forEach((value, index) => {
+      const pixel = mapPoint(value, bounds);
+      const radians = item.headings[index];
+      const degrees = radians * 180 / Math.PI;
+      addHoverPoint(
+        svg,
+        wrap,
+        { value, pixel },
+        `waypoint [${index}] ${item.label}`,
+        item.color,
+        4,
+        false,
+        `waypoint [${index}] ${item.label}: ${formatNumber(radians)} rad (${formatNumber(degrees)}°)`,
+      );
+    });
+  }
+  drawLegend(svg, series.map(({ label, color }) => ({ label, color })));
 }
 
 function validatePointData(data) {
@@ -341,16 +359,98 @@ function validatePointData(data) {
 }
 
 function validateAnalysisData(data, pathLength) {
-  if (!Number.isFinite(data.path_length_m) ||
-      !Array.isArray(data.headings_rad) ||
-      data.headings_rad.length !== pathLength ||
-      !data.headings_rad.every(Number.isFinite)) {
+  const hasHeadingChanges = pathLength > 1;
+  const hasValidStatistics = (statistics) =>
+    statistics === null
+      ? !hasHeadingChanges
+      : statistics &&
+        typeof statistics === "object" &&
+        ["minimum", "maximum", "mean"].every(
+          (key) => Number.isFinite(statistics[key]) &&
+            statistics[key] >= 0,
+        );
+  const waypointDistanceStatistics = data.waypoint_distance_statistics;
+  if (!Number.isFinite(data.path_length) ||
+      !Array.isArray(data.headings) ||
+      data.headings.length !== pathLength ||
+      !data.headings.every(Number.isFinite) ||
+      !waypointDistanceStatistics ||
+      !["minimum", "maximum", "mean"].every(
+        (key) => Number.isFinite(waypointDistanceStatistics[key]) &&
+          waypointDistanceStatistics[key] >= 0,
+      ) ||
+      !hasValidStatistics(data.heading_change_statistics) ||
+      !Array.isArray(data.adapted_heading_variants) ||
+      data.adapted_heading_variants.length !== 3 ||
+      !data.adapted_heading_variants.every((variant, index) =>
+        Number.isFinite(variant.window_distance) &&
+        variant.window_distance === [0.01, 0.05, 0.1][index] &&
+        Array.isArray(variant.headings) &&
+        variant.headings.length === pathLength &&
+        variant.headings.every(Number.isFinite) &&
+        hasValidStatistics(variant.heading_change_statistics),
+      )) {
     throw new Error("Invalid or missing C++-computed path length or headings.");
   }
   return {
-    pathLengthM: data.path_length_m,
-    headingsRad: data.headings_rad,
+    pathLength: data.path_length,
+    headings: data.headings,
+    waypointDistanceStatistics,
+    headingChangeStatistics: data.heading_change_statistics,
+    adaptedHeadingVariants: data.adapted_heading_variants.map((variant) => ({
+      windowDistance: variant.window_distance,
+      headings: variant.headings,
+      headingChangeStatistics: variant.heading_change_statistics,
+    })),
   };
+}
+
+function renderHeadingChangeStatistics(statistics, variants) {
+  const section = document.querySelector("#heading-change-summary");
+  const rows = [
+    {
+      label: "Original headings",
+      statistics,
+    },
+    ...variants.map((variant) => ({
+      label: `${variant.windowDistance} m window`,
+      statistics: variant.headingChangeStatistics,
+    })),
+  ];
+  const body = section.querySelector("tbody");
+  for (const row of rows) {
+    const tableRow = document.createElement("tr");
+    const label = document.createElement("th");
+    label.scope = "row";
+    label.textContent = row.label;
+    tableRow.append(label);
+    for (const key of ["minimum", "maximum", "mean"]) {
+      const cell = document.createElement("td");
+      cell.textContent = row.statistics
+        ? `${row.statistics[key].toPrecision(6)} rad`
+        : "—";
+      tableRow.append(cell);
+    }
+    body.append(tableRow);
+  }
+  section.hidden = false;
+}
+
+function renderWaypointDistanceStatistics(statistics) {
+  const section = document.querySelector("#waypoint-distance-summary");
+  const body = section.querySelector("tbody");
+  const row = document.createElement("tr");
+  const label = document.createElement("th");
+  label.scope = "row";
+  label.textContent = "Consecutive waypoints";
+  row.append(label);
+  for (const key of ["minimum", "maximum", "mean"]) {
+    const cell = document.createElement("td");
+    cell.textContent = `${statistics[key].toPrecision(6)} m`;
+    row.append(cell);
+  }
+  body.append(row);
+  section.hidden = false;
 }
 
 Promise.all([
@@ -377,9 +477,14 @@ Promise.all([
   .then((data) => {
     renderPath(data.path);
     renderGeometry(data.robot, data.cleaningGadget);
-    renderHeadings(data.headingsRad);
+    renderHeadings(data.headings, data.adaptedHeadingVariants);
+    renderHeadingChangeStatistics(
+      data.headingChangeStatistics,
+      data.adaptedHeadingVariants,
+    );
+    renderWaypointDistanceStatistics(data.waypointDistanceStatistics);
     const pathLength = document.querySelector("#path-length");
-    pathLength.textContent = `Path length: ${formatNumber(data.pathLengthM)} m`;
+    pathLength.textContent = `Path length: ${formatNumber(data.pathLength)} m`;
     pathLength.hidden = false;
     setStatus("");
   })

@@ -44,6 +44,40 @@
           </div>
         </article>
       </section>
+
+      <section id="heading-change-summary" class="distance-summary" aria-labelledby="distance-summary-title" hidden>
+        <h2 id="distance-summary-title">Consecutive heading changes</h2>
+        <div class="table-wrap">
+          <table class="distance-statistics">
+            <thead>
+              <tr>
+                <th scope="col">Heading estimate</th>
+                <th scope="col">Minimum heading change (rad)</th>
+                <th scope="col">Maximum heading change (rad)</th>
+                <th scope="col">Mean heading change (rad)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="waypoint-distance-summary" class="distance-summary" aria-labelledby="waypoint-distance-title" hidden>
+        <h2 id="waypoint-distance-title">Distances between consecutive waypoints</h2>
+        <div class="table-wrap">
+          <table class="distance-statistics">
+            <thead>
+              <tr>
+                <th scope="col">Distance values</th>
+                <th scope="col">Minimum (m)</th>
+                <th scope="col">Maximum (m)</th>
+                <th scope="col">Mean (m)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
       <footer>Data source: <code>data/short.json</code></footer>
     </main>
   </body>
