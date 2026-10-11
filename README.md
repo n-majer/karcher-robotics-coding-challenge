@@ -10,7 +10,7 @@ This coding challenge focuses on analyzing recorded robot path data to determine
 - A C++17 compiler:
   - GCC 9 or newer
   - Clang 10 or newer with a C++17-capable standard library
-- Boost 1.65 or newer, including the Boost.PropertyTree headers
+- Boost 1.65 or newer
 
 ### Install requirements on Ubuntu
 
@@ -36,12 +36,34 @@ The C++ command-line application can validate and count the sample data:
 ./build/data_analysis
 ```
 
-### Web visualization
+### Web Visualization
 
-The interactive browser visualization is a static page in `visualization/`. Serve the repository root over HTTP so the page can load `data/short.json`:
+The interactive browser visualization is a static page in `visualization/`. It loads geometry directly from `data/short.json` and the C++-computed metrics from `visualization/analysis.json`. First generate the metrics file with the C++ program, then serve the repository root over HTTP:
 
 ```sh
 python3 -m http.server 8000
 ```
 
 Then open <http://localhost:8000/visualization/> in a browser.
+
+## Approach
+
+In the initial version, the **path length** is calculated by summing the Euclidean distances between consecutive waypoints of the recorded robot path.
+
+For consecutive waypoints \(p_i=(x_i,y_i)\) and \(p_{i+1}=(x_{i+1},y_{i+1})\), define their coordinate differences as
+
+$$
+\Delta x_i = x_{i+1}-x_i,\qquad
+\Delta y_i = y_{i+1}-y_i.
+$$
+
+The heading estimation of the segment starting at waypoint \(p_i\) is calculated by
+
+$$
+\theta_i = \operatorname{atan2}(\Delta y_i,\Delta x_i).
+$$
+
+## Assumptions
+
+- I assume that the robot drove with constant heading in a straight line between two consecutive waypoints of the path.
+- I assume that the robot heading can be estimated by aligning the base_link x-axis with the straight line between two consecutive waypoints of the path.

@@ -13,14 +13,15 @@
       <header class="page-header">
         <p class="eyebrow">Kärcher · Robotics Coding Challenge</p>
         <h1>Robot data visualization</h1>
-        <p class="intro">Explore the recorded path and robot geometry. Hover over or focus a point to inspect its coordinates.</p>
+        <p class="intro">Hover over or focus a point to inspect its values.</p>
       </header>
 
       <p id="status" class="status" role="status">Loading visualization…</p>
+      <p id="path-length" class="path-length" aria-live="polite" hidden></p>
 
       <section class="plots" aria-label="Robot data plots">
         <article class="plot-card">
-          <h2>Robot path <span class="frame-tag">world frame</span></h2>
+          <h2>Robot path <span class="frame-tag">world frame · m</span></h2>
           <div class="plot-wrap">
             <svg id="path-plot" class="plot" viewBox="0 0 700 500" role="img" aria-label="Robot waypoints in the world frame"></svg>
             <div class="tooltip" role="status" hidden></div>
@@ -28,9 +29,17 @@
         </article>
 
         <article class="plot-card">
-          <h2>Robot footprint and cleaning gadget <span class="frame-tag">base_link frame</span></h2>
+          <h2>Robot footprint and cleaning gadget <span class="frame-tag">base_link frame · m</span></h2>
           <div class="plot-wrap">
             <svg id="geometry-plot" class="plot" viewBox="0 0 700 500" role="img" aria-label="Robot footprint and cleaning gadget in the base_link frame"></svg>
+            <div class="tooltip" role="status" hidden></div>
+          </div>
+        </article>
+
+        <article class="plot-card heading-card">
+          <h2>Robot path heading <span class="frame-tag">world frame · radians</span></h2>
+          <div class="plot-wrap">
+            <svg id="heading-plot" class="plot" viewBox="0 0 700 500" role="img" aria-label="Robot path heading by waypoint index in radians"></svg>
             <div class="tooltip" role="status" hidden></div>
           </div>
         </article>

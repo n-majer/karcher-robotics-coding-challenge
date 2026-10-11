@@ -64,6 +64,32 @@ h1 {
   gap: 20px;
 }
 
+.path-length {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  background: #eaf1f6;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.path-length strong {
+  color: #234f70;
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.heading-card {
+  grid-column: 1 / -1;
+}
+
+.heading-card .plot-wrap {
+  width: min(100%, 900px);
+  margin: 0 auto;
+}
+
 .plot-card {
   min-width: 0;
   padding: 14px 14px 6px;
@@ -141,5 +167,15 @@ footer {
 @media (max-width: 860px) {
   .plots {
     grid-template-columns: 1fr;
+  }
+
+  .heading-card {
+    grid-column: auto;
+  }
+
+  .path-length {
+    display: flex;
+    width: fit-content;
+    flex-wrap: wrap;
   }
 }

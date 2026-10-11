@@ -93,7 +93,16 @@ function showTooltip(event, tooltip, plotWrap, text) {
   tooltip.style.top = `${Math.max(6, y)}px`;
 }
 
-function addHoverPoint(svg, plotWrap, point, label, color, radius = 4, bold = false) {
+function addHoverPoint(
+  svg,
+  plotWrap,
+  point,
+  label,
+  color,
+  radius = 4,
+  bold = false,
+  tooltipContent = `${label}: (${formatNumber(point.value.x)} m, ${formatNumber(point.value.y)} m)`,
+) {
   const tooltip = plotWrap.querySelector(".tooltip");
   const circle = svgElement("circle", {
     cx: point.pixel.x,
@@ -105,14 +114,13 @@ function addHoverPoint(svg, plotWrap, point, label, color, radius = 4, bold = fa
     class: "plot-point",
     tabindex: 0,
     role: "img",
-    "aria-label": `${label}: (${formatNumber(point.value.x)}, ${formatNumber(point.value.y)})`,
+    "aria-label": tooltipContent,
   });
-  const content = `${label}: (${formatNumber(point.value.x)}, ${formatNumber(point.value.y)})`;
   circle.addEventListener("pointerenter", (event) =>
-    showTooltip(event, tooltip, plotWrap, content),
+    showTooltip(event, tooltip, plotWrap, tooltipContent),
   );
   circle.addEventListener("pointermove", (event) =>
-    showTooltip(event, tooltip, plotWrap, content),
+    showTooltip(event, tooltip, plotWrap, tooltipContent),
   );
   circle.addEventListener("pointerleave", () => {
     tooltip.hidden = true;
@@ -123,7 +131,7 @@ function addHoverPoint(svg, plotWrap, point, label, color, radius = 4, bold = fa
       { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 },
       tooltip,
       plotWrap,
-      content,
+      tooltipContent,
     );
   });
   circle.addEventListener("blur", () => {
@@ -132,7 +140,7 @@ function addHoverPoint(svg, plotWrap, point, label, color, radius = 4, bold = fa
   svg.append(circle);
 }
 
-function drawAxes(svg, bounds) {
+function drawAxes(svg, bounds, xLabel = "x", yLabel = "y") {
   for (let tick = 0; tick <= 5; tick += 1) {
     const fraction = tick / 5;
     const x = PLOT.left + fraction * (WIDTH - PLOT.left - PLOT.right);
@@ -155,8 +163,8 @@ function drawAxes(svg, bounds) {
       fill: "none",
       stroke: COLORS.text,
     }),
-    svgElement("text", { x: WIDTH / 2, y: HEIGHT - 13, "text-anchor": "middle", fill: COLORS.text, "font-size": 13 }, "x"),
-    svgElement("text", { x: 22, y: HEIGHT / 2, "text-anchor": "middle", fill: COLORS.text, "font-size": 13, transform: `rotate(-90 22 ${HEIGHT / 2})` }, "y"),
+    svgElement("text", { x: WIDTH / 2, y: HEIGHT - 13, "text-anchor": "middle", fill: COLORS.text, "font-size": 13 }, xLabel),
+    svgElement("text", { x: 22, y: HEIGHT / 2, "text-anchor": "middle", fill: COLORS.text, "font-size": 13, transform: `rotate(-90 22 ${HEIGHT / 2})` }, yLabel),
   );
 }
 
@@ -246,7 +254,7 @@ function renderPath(waypoints) {
   const svg = document.querySelector("#path-plot");
   const wrap = svg.parentElement;
   const bounds = getBounds([waypoints]);
-  drawAxes(svg, bounds);
+  drawAxes(svg, bounds, "x (world frame, m)", "y (world frame, m)");
   svg.append(svgElement("text", { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 }, "Robot path · world frame"));
   drawPath(svg, wrap, waypoints, bounds);
   drawLegend(svg, [
@@ -260,7 +268,7 @@ function renderGeometry(robot, gadget) {
   const svg = document.querySelector("#geometry-plot");
   const wrap = svg.parentElement;
   const bounds = getBounds([robot, gadget], true);
-  drawAxes(svg, bounds);
+  drawAxes(svg, bounds, "x (base_link, m)", "y (base_link, m)");
   svg.append(svgElement("text", { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 }, "Robot footprint and cleaning gadget"));
   drawPolygon(svg, wrap, robot, bounds, "robot footprint (base_link)", COLORS.footprint, true);
   drawPolygon(svg, wrap, gadget, bounds, "cleaning gadget (base_link)", COLORS.gadget);
@@ -272,9 +280,52 @@ function renderGeometry(robot, gadget) {
   ]);
 }
 
-function validateData(data) {
-  const keys = ["path", "robot", "cleaning_gadget"];
-  for (const key of keys) {
+function renderHeadings(headings) {
+  const svg = document.querySelector("#heading-plot");
+  const wrap = svg.parentElement;
+  const values = headings.map((heading, index) => ({ x: index, y: heading }));
+  const bounds = {
+    minX: -0.5,
+    maxX: Math.max(0.5, headings.length - 0.5),
+    minY: -Math.PI,
+    maxY: Math.PI,
+  };
+  drawAxes(svg, bounds, "waypoint index", "heading (rad)");
+  svg.append(svgElement("text", { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 }, "Heading by waypoint · world frame"));
+  if (values.length > 1) {
+    svg.append(svgElement("polyline", {
+      points: values.map((value) => {
+        const pixel = mapPoint(value, bounds);
+        return `${pixel.x},${pixel.y}`;
+      }).join(" "),
+      fill: "none",
+      stroke: COLORS.origin,
+      "stroke-width": 2,
+      "stroke-linejoin": "round",
+      "stroke-linecap": "round",
+    }));
+  }
+  values.forEach((value, index) => {
+    const pixel = mapPoint(value, bounds);
+    const radians = headings[index];
+    const degrees = radians * 180 / Math.PI;
+    addHoverPoint(
+      svg,
+      wrap,
+      { value, pixel },
+      `waypoint [${index}] heading`,
+      COLORS.origin,
+      4,
+      false,
+      `waypoint [${index}] heading: ${formatNumber(radians)} rad (${formatNumber(degrees)}°)`,
+    );
+  });
+  drawLegend(svg, [{ label: "heading", color: COLORS.origin }]);
+}
+
+function validatePointData(data) {
+  const pointKeys = ["path", "robot", "cleaning_gadget"];
+  for (const key of pointKeys) {
     if (!Array.isArray(data[key]) || !data[key].every(
       (point) => Array.isArray(point) && point.length === 2 &&
         point.every((coordinate) => Number.isFinite(coordinate)),
@@ -289,15 +340,47 @@ function validateData(data) {
   };
 }
 
-fetch("../data/short.json")
-  .then((response) => {
-    if (!response.ok) throw new Error(`Could not load ../data/short.json (${response.status}).`);
+function validateAnalysisData(data, pathLength) {
+  if (!Number.isFinite(data.path_length_m) ||
+      !Array.isArray(data.headings_rad) ||
+      data.headings_rad.length !== pathLength ||
+      !data.headings_rad.every(Number.isFinite)) {
+    throw new Error("Invalid or missing C++-computed path length or headings.");
+  }
+  return {
+    pathLengthM: data.path_length_m,
+    headingsRad: data.headings_rad,
+  };
+}
+
+Promise.all([
+  fetch("../data/short.json").then((response) => {
+    if (!response.ok) {
+      throw new Error(`Could not load ../data/short.json (${response.status}).`);
+    }
     return response.json();
+  }).then(validatePointData),
+  fetch("analysis.json").then((response) => {
+    if (!response.ok) {
+      throw new Error(`Could not load analysis.json (${response.status}). Run the C++ data_analysis program first.`);
+    }
+    return response.json();
+  }),
+])
+  .then((response) => {
+    const [pointData, analysisData] = response;
+    return {
+      ...pointData,
+      ...validateAnalysisData(analysisData, pointData.path.length),
+    };
   })
-  .then(validateData)
   .then((data) => {
     renderPath(data.path);
     renderGeometry(data.robot, data.cleaningGadget);
+    renderHeadings(data.headingsRad);
+    const pathLength = document.querySelector("#path-length");
+    pathLength.textContent = `Path length: ${formatNumber(data.pathLengthM)} m`;
+    pathLength.hidden = false;
     setStatus("");
   })
   .catch((error) => {
