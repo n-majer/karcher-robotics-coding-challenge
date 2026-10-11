@@ -1,8 +1,10 @@
 #include "data_analysis/robot_data.hpp"
 
+#include <algorithm>
 #include <exception>
 #include <iomanip>
 #include <iostream>
+#include <numeric>
 #include <string>
 
 int main(int argc, char* argv[]) {
@@ -55,6 +57,29 @@ int main(int argc, char* argv[]) {
             std::cout << "  Heading change min/max/mean (rad): "
                       << statistics.minimum << " / " << statistics.maximum
                       << " / " << statistics.mean << '\n';
+        }
+        std::cout << "Curvature approximations: "
+                  << robot_data.curvature_approximations.size()
+                  << " filtered path segments (signed, 1/m).\n";
+        if (!robot_data.curvature_approximations.empty()) {
+            const auto [minimum, maximum] = std::minmax_element(
+                robot_data.curvature_approximations.begin(),
+                robot_data.curvature_approximations.end(),
+                [](const auto& left, const auto& right) {
+                    return left.curvature < right.curvature;
+                });
+            const double mean = std::accumulate(
+                                    robot_data.curvature_approximations.begin(),
+                                    robot_data.curvature_approximations.end(),
+                                    0.0,
+                                    [](double total, const auto& value) {
+                                        return total + value.curvature;
+                                    }) /
+                                static_cast<double>(
+                                    robot_data.curvature_approximations.size());
+            std::cout << "  Minimum: " << minimum->curvature << '\n'
+                      << "  Maximum: " << maximum->curvature << '\n'
+                      << "  Mean:    " << mean << '\n';
         }
     } catch (const std::exception& error) {
         std::cerr << "Failed to read '" << input_path << "': " << error.what()

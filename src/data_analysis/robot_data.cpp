@@ -109,6 +109,42 @@ std::optional<WaypointDistanceStatistics> calculate_heading_change_statistics(
     return calculate_distance_statistics(changes);
 }
 
+std::vector<CurvatureApproximation> calculate_curvature_approximations(
+    const std::vector<Point2D>& waypoints,
+    const std::vector<std::size_t>& waypoint_indices,
+    const std::vector<double>& headings) {
+    if (waypoint_indices.size() != waypoints.size() ||
+        headings.size() != waypoints.size()) {
+        throw std::runtime_error(
+            "curvature calculation requires matching filtered waypoints, "
+            "indices, and headings");
+    }
+
+    std::vector<CurvatureApproximation> approximations;
+    if (waypoints.size() < 2) {
+        return approximations;
+    }
+    approximations.reserve(waypoints.size() - 1);
+    for (std::size_t index = 0; index + 1 < waypoints.size(); ++index) {
+        const double heading_difference = headings[index + 1] - headings[index];
+        const double heading_change =
+            std::atan2(std::sin(heading_difference),
+                       std::cos(heading_difference));
+        const double distance =
+            std::hypot(waypoints[index + 1].x - waypoints[index].x,
+                       waypoints[index + 1].y - waypoints[index].y);
+        if (distance <= 0.0) {
+            throw std::runtime_error(
+                "curvature calculation encountered coincident filtered "
+                "waypoints");
+        }
+        approximations.push_back(
+            {waypoint_indices[index], waypoint_indices[index + 1],
+             heading_change, distance, heading_change / distance});
+    }
+    return approximations;
+}
+
 std::pair<std::vector<double>, std::vector<double>> estimate_headings(
     const std::vector<Point2D>& waypoints,
     double window_distance) {
@@ -316,6 +352,9 @@ void calculate_path_metrics(RobotData& robot_data) {
     subsampled_estimation.headings = std::move(estimated_headings.first);
     subsampled_estimation.heading_change_statistics =
         calculate_heading_change_statistics(subsampled_estimation.headings);
+    robot_data.curvature_approximations = calculate_curvature_approximations(
+        subsampled_waypoints, subsampled_estimation.waypoint_indices,
+        subsampled_estimation.headings);
 
     if (!robot_data.waypoint_distances.empty()) {
         robot_data.waypoint_distance_statistics = calculate_distance_statistics(
@@ -418,6 +457,22 @@ void write_visualization_data(const RobotData& robot_data,
         output << ']';
     }
     output << ']';
+    output << ",\n  \"curvature_approximations\": [";
+    for (std::size_t index = 0;
+         index < robot_data.curvature_approximations.size(); ++index) {
+        if (index != 0) {
+            output << ',';
+        }
+        const auto& approximation = robot_data.curvature_approximations[index];
+        output << "\n    { \"start_waypoint_index\": "
+               << approximation.start_waypoint_index
+               << ", \"end_waypoint_index\": "
+               << approximation.end_waypoint_index
+               << ", \"heading_change\": " << approximation.heading_change
+               << ", \"distance\": " << approximation.distance
+               << ", \"curvature\": " << approximation.curvature << " }";
+    }
+    output << "\n  ]";
     const auto& subsampled_estimation =
         robot_data.subsampled_heading_estimation;
     output << ",\n  \"subsampled_heading_estimation\": {\n"

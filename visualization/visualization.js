@@ -455,6 +455,75 @@ function renderHeadings(headings, subsampledHeadingEstimation) {
   })));
 }
 
+function renderCurvature(approximations) {
+  const svg = document.querySelector("#curvature-plot");
+  const values = approximations.map((item) => ({
+    x: item.startWaypointIndex,
+    y: item.curvature,
+  }));
+  const minX = values.length ? values[0].x : 0;
+  const maxX = values.length ? values[values.length - 1].x : 1;
+  let minY = values.length ? Math.min(...values.map((item) => item.y)) : -1;
+  let maxY = values.length ? Math.max(...values.map((item) => item.y)) : 1;
+  const yPadding = Math.max((maxY - minY) * 0.08, 1e-6);
+  minY -= yPadding;
+  maxY += yPadding;
+  const bounds = {
+    minX: minX - 0.5,
+    maxX: Math.max(minX + 0.5, maxX + 0.5),
+    minY,
+    maxY,
+  };
+  drawAxes(
+    svg,
+    bounds,
+    "starting waypoint index",
+    "curvature (1/m)",
+    (value) => String(Math.max(minX, Math.min(maxX, Math.round(value)))),
+  );
+  svg.append(svgElement(
+    "text",
+    { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 },
+    "Curvature approximation by filtered path segment",
+  ));
+  const group = createSeriesGroup(svg, "curvature");
+  if (values.length > 1) {
+    group.append(svgElement("polyline", {
+      points: values.map((value) => {
+        const pixel = mapPoint(value, bounds);
+        return `${pixel.x},${pixel.y}`;
+      }).join(" "),
+      fill: "none",
+      stroke: COLORS.origin,
+      "stroke-width": 2,
+      "stroke-linejoin": "round",
+      "stroke-linecap": "round",
+    }));
+  }
+  values.forEach((value, index) => {
+    const approximation = approximations[index];
+    const pixel = mapPoint(value, bounds);
+    addHoverPoint(
+      group,
+      svg.parentElement,
+      { value, pixel },
+      `waypoints ${approximation.startWaypointIndex}–${approximation.endWaypointIndex}`,
+      COLORS.origin,
+      4,
+      false,
+      `waypoints ${approximation.startWaypointIndex}–${approximation.endWaypointIndex}: ` +
+        `${approximation.curvature.toPrecision(6)} 1/m ` +
+        `(Δθ ${approximation.headingChange.toPrecision(6)} rad, ` +
+        `Δs ${approximation.distance.toPrecision(6)} m)`,
+    );
+  });
+  drawLegend(svg, [{
+    label: "Signed curvature",
+    color: COLORS.origin,
+    target: "curvature",
+  }]);
+}
+
 function validatePointData(data) {
   const pointKeys = ["path", "robot", "cleaning_gadget"];
   for (const key of pointKeys) {
@@ -484,6 +553,7 @@ function validateAnalysisData(data, pathLength) {
         );
   const waypointDistanceStatistics = data.waypoint_distance_statistics;
   const subsampledEstimation = data.subsampled_heading_estimation;
+  const curvatureApproximations = data.curvature_approximations;
   const cleanedAreaGeometry = data.cleaned_area_geometry;
   const validCleanedAreaGeometry = Array.isArray(cleanedAreaGeometry) &&
     cleanedAreaGeometry.every((polygon) =>
@@ -513,9 +583,30 @@ function validateAnalysisData(data, pathLength) {
       subsampledEstimation.heading_change_statistics,
       subsampledEstimation.headings.length,
     );
+  const validCurvatureApproximations =
+    Array.isArray(curvatureApproximations) &&
+    curvatureApproximations.length ===
+      Math.max(0, subsampledEstimation?.waypoint_indices?.length - 1) &&
+    curvatureApproximations.every((approximation, index) =>
+      approximation.start_waypoint_index ===
+        subsampledEstimation.waypoint_indices[index] &&
+      approximation.end_waypoint_index ===
+        subsampledEstimation.waypoint_indices[index + 1] &&
+      Number.isFinite(approximation.heading_change) &&
+      approximation.heading_change >= -Math.PI &&
+      approximation.heading_change <= Math.PI &&
+      Number.isFinite(approximation.distance) &&
+      approximation.distance > 0 &&
+      Number.isFinite(approximation.curvature) &&
+      Math.abs(
+        approximation.curvature -
+          approximation.heading_change / approximation.distance,
+      ) < 1e-9,
+    );
   if (!Number.isFinite(data.path_length) ||
       !Number.isFinite(data.cleaned_area) ||
       data.cleaned_area < 0 ||
+      !validCurvatureApproximations ||
       !validCleanedAreaGeometry ||
       !Array.isArray(data.headings) ||
       data.headings.length !== pathLength ||
@@ -535,6 +626,13 @@ function validateAnalysisData(data, pathLength) {
     cleanedAreaGeometry: cleanedAreaGeometry.map((polygon) =>
       polygon.map((ring) => ring.map(([x, y]) => ({ x, y }))),
     ),
+    curvatureApproximations: curvatureApproximations.map((item) => ({
+      startWaypointIndex: item.start_waypoint_index,
+      endWaypointIndex: item.end_waypoint_index,
+      headingChange: item.heading_change,
+      distance: item.distance,
+      curvature: item.curvature,
+    })),
     headings: data.headings,
     waypointDistanceStatistics,
     headingChangeStatistics: data.heading_change_statistics,
@@ -624,6 +722,7 @@ Promise.all([
     );
     renderGeometry(data.robot, data.cleaningGadget);
     renderHeadings(data.headings, data.subsampledHeadingEstimation);
+    renderCurvature(data.curvatureApproximations);
     renderHeadingChangeStatistics(
       data.headingChangeStatistics,
       data.subsampledHeadingEstimation,

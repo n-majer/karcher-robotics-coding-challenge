@@ -63,6 +63,12 @@ $$
 \theta_i = \operatorname{atan2}(\Delta y_i,\Delta x_i).
 $$
 
+The Euclidean distance between two consecutive waypoints is
+
+$$
+\Delta s_i = \sqrt{(x_{i+1}-x_i)^2 + (y_{i+1}-y_i)^2}.
+$$
+
 Since the distances between the measured waypoints in the recorded data of the robot path are at the beginning and in the end really small, resulting in great variance in successive heading estimations, the distance between two waypoints before and after the respective waypoint $p_i$ to determine the heading estimation is to be enlarged. The minimum, maximum and mean distances between two consecutive waypoints have been determined:
 - minimum distance = 0.000110050 m
 - maximum distance = 0.232033 m
@@ -71,6 +77,8 @@ Since the distances between the measured waypoints in the recorded data of the r
 The analysis uses a fixed minimum subsampling distance of 0.01 m and a heading window of 0.03 m. It keeps the first waypoint, then retains each following waypoint only when it is at least 0.01 m from the last retained waypoint. The reported path length is summed along this filtered path. Headings are estimated on the filtered path using the 0.03 m window; interior points use symmetric neighbors, endpoints use a one-sided window, and the largest available window is used if the target cannot be reached. The heading plot overlays these filtered-path estimates with the original estimates and aligns them to the original waypoint indices. The visualization shows minimum, maximum, and mean absolute changes between consecutive headings for both series.
 
 The cleaned area is calculated from the filtered path (minimum waypoint spacing 0.01 m) and its 0.03 m-window heading estimates. The two cleaning-gadget segment endpoints are rotated by each filtered waypoint's estimated heading and translated to that waypoint. For each pair of consecutive filtered waypoints, the convex hull of the four transformed endpoints approximates the swept polygon. The reported area is the union of those polygons, so overlapping regions count only once; this union is shaded in the robot path plot.
+
+For each consecutive pair of filtered waypoints, the curvature approximation is the signed, wrap-aware heading change divided by the Euclidean distance between the waypoints: $\kappa_i = \operatorname{atan2}(\sin(\theta_{i+1}-\theta_i),\cos(\theta_{i+1}-\theta_i)) / \Delta s_i$. Values are recorded with both original waypoint indices and plotted against the starting waypoint index in units of inverse meters.
 
 ## Assumptions
 
