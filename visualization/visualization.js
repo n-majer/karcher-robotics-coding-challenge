@@ -187,19 +187,32 @@ function drawLegend(svg, items) {
       x = PLOT.left + 4;
     }
     const y = firstY + row * 20;
+    const initiallyHidden = Boolean(item.hiddenByDefault);
     const entry = svgElement("g", {
       role: "button",
       tabindex: 0,
       "aria-label": `Toggle ${item.label}`,
-      "aria-pressed": "true",
+      "aria-pressed": String(!initiallyHidden),
       "data-legend-target": item.target,
-      class: "plot-legend-item",
+      class: `plot-legend-item${initiallyHidden ? " is-hidden" : ""}`,
     });
     entry.append(
       svgElement("line", { x1: x, y1: y - 4, x2: x + 20, y2: y - 4, stroke: item.color, "stroke-width": 3 }),
       svgElement("text", { x: x + 26, y, fill: COLORS.text, "font-size": 12 }, item.label),
     );
+    if (initiallyHidden) {
+      for (const target of item.targets ?? [item.target]) {
+        svg.querySelector(`[data-series="${target}"]`)?.setAttribute(
+          "display",
+          "none",
+        );
+      }
+    }
     const toggleSeries = () => {
+      if (item.onActivate) {
+        item.onActivate();
+        return;
+      }
       const targets = item.targets ?? [item.target];
       const series = targets
         .map((target) => svg.querySelector(`[data-series="${target}"]`))
@@ -214,6 +227,7 @@ function drawLegend(svg, items) {
       }
       entry.setAttribute("aria-pressed", String(!shouldHide));
       entry.classList.toggle("is-hidden", shouldHide);
+      item.onToggle?.(!shouldHide);
     };
     entry.addEventListener("click", toggleSeries);
     entry.addEventListener("keydown", (event) => {
@@ -250,7 +264,7 @@ function drawPathSeries(
       points: pixels.map(({ pixel }) => `${pixel.x},${pixel.y}`).join(" "),
       fill: "none",
       stroke: color,
-      "stroke-width": key === "original-path" ? 2 : 3,
+      "stroke-width": key === "original-path" ? 0.8 : 1,
       "stroke-linejoin": "round",
       "stroke-linecap": "round",
     }));
@@ -262,7 +276,7 @@ function drawPathSeries(
       point,
       `${label} waypoint [${waypointIndices[index]}]`,
       color,
-      3,
+      1.5,
     );
   });
   return { group, pixels };
@@ -337,106 +351,6 @@ function renderCleanedArea(svg, polygonGeometry, bounds) {
   }
 }
 
-function velocityColor(speed, minimum, maximum) {
-  const fraction = maximum === minimum
-    ? 0.5
-    : Math.max(0, Math.min(1, (speed - minimum) / (maximum - minimum)));
-  const stops = [
-    { position: 0, color: [49, 54, 149] },
-    { position: 0.5, color: [255, 255, 191] },
-    { position: 1, color: [165, 0, 38] },
-  ];
-  const upperIndex = stops.findIndex((stop) => stop.position >= fraction);
-  const lower = stops[Math.max(0, upperIndex - 1)];
-  const upper = stops[Math.max(0, upperIndex)];
-  const localFraction = upper.position === lower.position
-    ? 0
-    : (fraction - lower.position) / (upper.position - lower.position);
-  const channels = lower.color.map((channel, index) =>
-    Math.round(channel + (upper.color[index] - channel) * localFraction),
-  );
-  return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
-}
-
-function renderVelocityPath(svg, filteredWaypoints, waypointVelocities, bounds) {
-  if (filteredWaypoints.length !== waypointVelocities.length ||
-      filteredWaypoints.length < 2) {
-    return;
-  }
-  const speeds = waypointVelocities.map((velocity) => velocity.speed);
-  const minimum = Math.min(...speeds);
-  const maximum = Math.max(...speeds);
-  const group = createSeriesGroup(svg, "velocity-path");
-  for (let index = 0; index < filteredWaypoints.length - 1; index += 1) {
-    const start = mapPoint(filteredWaypoints[index], bounds);
-    const end = mapPoint(filteredWaypoints[index + 1], bounds);
-    const speed = (speeds[index] + speeds[index + 1]) / 2;
-    group.append(svgElement("line", {
-      x1: start.x,
-      y1: start.y,
-      x2: end.x,
-      y2: end.y,
-      stroke: velocityColor(speed, minimum, maximum),
-      "stroke-width": 4,
-      "stroke-linecap": "round",
-      "aria-label": `Path segment velocity: ${formatNumber(speed)} m/s`,
-    }));
-  }
-}
-
-function renderVelocityScale(svg, waypointVelocities) {
-  if (waypointVelocities.length === 0) return;
-  const speeds = waypointVelocities.map((velocity) => velocity.speed);
-  const minimum = Math.min(...speeds);
-  const maximum = Math.max(...speeds);
-  const defs = svgElement("defs");
-  const gradient = svgElement("linearGradient", {
-    id: "path-velocity-gradient",
-    x1: "0%",
-    x2: "100%",
-    y1: "0%",
-    y2: "0%",
-  });
-  gradient.append(
-    svgElement("stop", { offset: "0%", "stop-color": velocityColor(minimum, minimum, maximum) }),
-    svgElement("stop", { offset: "50%", "stop-color": velocityColor((minimum + maximum) / 2, minimum, maximum) }),
-    svgElement("stop", { offset: "100%", "stop-color": velocityColor(maximum, minimum, maximum) }),
-  );
-  defs.append(gradient);
-  svg.prepend(defs);
-  const scaleX = 390;
-  const scaleWidth = 280;
-  const tickCount = 5;
-  const ticks = Array.from({ length: tickCount }, (_, index) => {
-    const fraction = index / (tickCount - 1);
-    const speed = minimum + fraction * (maximum - minimum);
-    const x = scaleX + fraction * scaleWidth;
-    return [
-      svgElement("line", {
-        x1: x,
-        y1: 40,
-        x2: x,
-        y2: 46,
-        stroke: COLORS.text,
-        "stroke-width": 1,
-      }),
-      svgElement("text", {
-        x,
-        y: 51,
-        fill: COLORS.text,
-        "font-size": 10,
-        "text-anchor": index === 0 ? "start" : index === tickCount - 1 ? "end" : "middle",
-      }, formatNumber(speed)),
-    ];
-  }).flat();
-  const scale = createSeriesGroup(svg, "velocity-scale");
-  scale.append(
-    svgElement("text", { x: scaleX, y: 15, fill: COLORS.text, "font-size": 12, "font-weight": 650 }, "Velocity (m/s)"),
-    svgElement("rect", { x: scaleX, y: 20, width: scaleWidth, height: 18, rx: 5, fill: "url(#path-velocity-gradient)" }),
-    ...ticks,
-  );
-}
-
 function transformPosePoint(waypoint, point, heading) {
   const cosine = Math.cos(heading);
   const sine = Math.sin(heading);
@@ -490,40 +404,32 @@ function renderHeadingArrows(svg, waypoints, headings, bounds) {
   }
 }
 
-function renderRobotPoses(svg, waypoints, headings, robot, gadget, bounds) {
-  const robotGroup = createSeriesGroup(svg, "robot-poses");
-  const gadgetGroup = createSeriesGroup(svg, "gadget-poses");
-  for (let index = 0; index < waypoints.length; index += 10) {
-    const robotPixels = robot.map((point) =>
-      mapPoint(transformPosePoint(waypoints[index], point, headings[index]), bounds),
-    );
-    const robotPolygon = svgElement("polygon", {
-      points: robotPixels.map(({ x, y }) => `${x},${y}`).join(" "),
-      fill: COLORS.footprint,
-      "fill-opacity": 0.18,
-      stroke: COLORS.footprint,
-      "stroke-width": 1.5,
-      "aria-label": `Robot footprint at filtered waypoint ${index}`,
-    });
-    robotPolygon.append(svgElement("title", {}, `Robot footprint at filtered waypoint ${index}`));
-    robotGroup.append(robotPolygon);
+function renderRobotPoses(svg) {
+  const robotGroup = createSeriesGroup(svg, "animated-robot");
+  const gadgetGroup = createSeriesGroup(svg, "animated-gadget");
+  const movingRobot = svgElement("polygon", {
+    display: "none",
+    fill: COLORS.footprint,
+    "fill-opacity": 0.32,
+    stroke: COLORS.footprint,
+    "stroke-width": 2,
+    "aria-label": "Animated robot footprint",
+  });
+  const movingGadget = svgElement("line", {
+    display: "none",
+    stroke: COLORS.gadget,
+    "stroke-width": 4,
+    "stroke-linecap": "round",
+    "aria-label": "Animated cleaning gadget",
+  });
+  robotGroup.append(movingRobot);
+  gadgetGroup.append(movingGadget);
+  return { movingRobot, movingGadget };
+}
 
-    const gadgetPixels = gadget.map((point) =>
-      mapPoint(transformPosePoint(waypoints[index], point, headings[index]), bounds),
-    );
-    const gadgetLine = svgElement("line", {
-      x1: gadgetPixels[0].x,
-      y1: gadgetPixels[0].y,
-      x2: gadgetPixels[1].x,
-      y2: gadgetPixels[1].y,
-      stroke: COLORS.gadget,
-      "stroke-width": 3,
-      "stroke-linecap": "round",
-      "aria-label": `Cleaning gadget at filtered waypoint ${index}`,
-    });
-    gadgetLine.append(svgElement("title", {}, `Cleaning gadget at filtered waypoint ${index}`));
-    gadgetGroup.append(gadgetLine);
-  }
+function interpolateHeading(start, end, fraction) {
+  const difference = Math.atan2(Math.sin(end - start), Math.cos(end - start));
+  return start + difference * fraction;
 }
 
 function renderPath(
@@ -539,7 +445,7 @@ function renderPath(
   const wrap = svg.parentElement;
   const filteredWaypoints = subsampledWaypointIndices.map((index) => waypoints[index]);
   const posePoints = [];
-  for (let index = 0; index < filteredWaypoints.length; index += 10) {
+  for (let index = 0; index < filteredWaypoints.length; index += 1) {
     posePoints.push(
       ...robot.map((point) =>
         transformPosePoint(filteredWaypoints[index], point, subsampledHeadings[index]),
@@ -573,34 +479,137 @@ function renderPath(
     COLORS.adapted,
     subsampledWaypointIndices,
   );
-  renderVelocityPath(
-    svg,
-    filteredWaypoints,
-    waypointVelocities,
-    bounds,
-  );
-  renderVelocityScale(svg, waypointVelocities);
   renderHeadingArrows(svg, filteredWaypoints, subsampledHeadings, bounds);
-  renderRobotPoses(
-    svg,
-    filteredWaypoints,
-    subsampledHeadings,
-    robot,
-    gadget,
-    bounds,
+  const movingPose = renderRobotPoses(svg);
+  const speedReadout = document.querySelector("#current-speed");
+  const animationSegments = filteredWaypoints.slice(0, -1).map((start, index) => {
+    const end = filteredWaypoints[index + 1];
+    const startSpeed = waypointVelocities[index].speed;
+    const endSpeed = waypointVelocities[index + 1].speed;
+    const distance = pointDistance(start, end);
+    const duration = distance / ((startSpeed + endSpeed) / 2);
+    return { start, end, startSpeed, endSpeed, distance, duration };
+  });
+  const cycleDuration = animationSegments.reduce(
+    (total, segment) => total + segment.duration,
+    0,
   );
+  let animationFrame = null;
+  let animationStart = null;
+  const speedLegend = () =>
+    svg.querySelector('[data-legend-target="speed-animation"]');
+
+  const stopAnimation = (hidePose = true) => {
+    if (animationFrame !== null) {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = null;
+    }
+    animationStart = null;
+    speedLegend()?.setAttribute("aria-pressed", "false");
+    if (hidePose) {
+      speedReadout.hidden = true;
+      movingPose.movingRobot.setAttribute("display", "none");
+      movingPose.movingGadget.setAttribute("display", "none");
+    }
+  };
+
+  const hideSeries = (key) => {
+    svg.querySelector(`[data-series="${key}"]`)?.setAttribute("display", "none");
+    const legendEntry = svg.querySelector(
+      `[data-legend-target="${key}"]`,
+    );
+    legendEntry?.setAttribute("aria-pressed", "false");
+    legendEntry?.classList.add("is-hidden");
+  };
+
+  const updatePose = (elapsed) => {
+    movingPose.movingRobot.removeAttribute("display");
+    movingPose.movingGadget.removeAttribute("display");
+    let segmentStartTime = 0;
+    let segmentIndex = 0;
+    while (
+      segmentIndex < animationSegments.length - 1 &&
+      elapsed >= segmentStartTime + animationSegments[segmentIndex].duration
+    ) {
+      segmentStartTime += animationSegments[segmentIndex].duration;
+      segmentIndex += 1;
+    }
+
+    const segment = animationSegments[segmentIndex];
+    const segmentElapsed = Math.min(
+      segment.duration,
+      Math.max(0, elapsed - segmentStartTime),
+    );
+    const timeFraction = segmentElapsed / segment.duration;
+    const distanceFraction =
+      (segment.startSpeed * segmentElapsed +
+        0.5 * (segment.endSpeed - segment.startSpeed) *
+          segmentElapsed * timeFraction) /
+      segment.distance;
+    const position = {
+      x: segment.start.x + (segment.end.x - segment.start.x) * distanceFraction,
+      y: segment.start.y + (segment.end.y - segment.start.y) * distanceFraction,
+    };
+    const heading = interpolateHeading(
+      subsampledHeadings[segmentIndex],
+      subsampledHeadings[segmentIndex + 1],
+      distanceFraction,
+    );
+    const robotPixels = robot.map((point) =>
+      mapPoint(transformPosePoint(position, point, heading), bounds),
+    );
+    movingPose.movingRobot.setAttribute(
+      "points",
+      robotPixels.map(({ x, y }) => `${x},${y}`).join(" "),
+    );
+    const gadgetPixels = gadget.map((point) =>
+      mapPoint(transformPosePoint(position, point, heading), bounds),
+    );
+    movingPose.movingGadget.setAttribute("x1", gadgetPixels[0].x);
+    movingPose.movingGadget.setAttribute("y1", gadgetPixels[0].y);
+    movingPose.movingGadget.setAttribute("x2", gadgetPixels[1].x);
+    movingPose.movingGadget.setAttribute("y2", gadgetPixels[1].y);
+    const currentSpeed =
+      segment.startSpeed +
+      (segment.endSpeed - segment.startSpeed) * timeFraction;
+    speedReadout.textContent = `Speed: ${formatNumber(currentSpeed)} m/s`;
+    speedReadout.hidden = false;
+  };
+
+  const animatePose = (timestamp) => {
+    if (animationStart === null) animationStart = timestamp;
+    const elapsed = (timestamp - animationStart) / 1000;
+    updatePose(Math.min(elapsed, cycleDuration));
+    if (elapsed >= cycleDuration) {
+      animationFrame = null;
+      animationStart = null;
+      hideSeries("heading-arrows");
+      speedLegend()?.setAttribute("aria-pressed", "false");
+      return;
+    }
+    animationFrame = requestAnimationFrame(animatePose);
+  };
+
+  const startAnimation = () => {
+    if (animationSegments.length === 0 || cycleDuration <= 0) return;
+    stopAnimation(false);
+    hideSeries("heading-arrows");
+    speedLegend()?.setAttribute("aria-pressed", "true");
+    animationStart = null;
+    updatePose(0);
+    animationFrame = requestAnimationFrame(animatePose);
+  };
   drawLegend(svg, [
+    {
+      label: "Speed",
+      color: COLORS.footprint,
+      target: "speed-animation",
+      onActivate: startAnimation,
+    },
     { label: "Recorded path", color: COLORS.path, target: "original-path" },
     { label: "Filtered path", color: COLORS.adapted, target: "filtered-path" },
     { label: "Cleaned area", color: "#267653", target: "cleaned-area" },
-    {
-      label: "Speed",
-      color: "url(#path-velocity-gradient)",
-      targets: ["velocity-path", "velocity-scale"],
-    },
     { label: "Heading", color: "#202b36", target: "heading-arrows" },
-    { label: "Robot", color: COLORS.footprint, target: "robot-poses" },
-    { label: "Cleaning gadget", color: COLORS.gadget, target: "gadget-poses" },
   ]);
 }
 

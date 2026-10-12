@@ -92,7 +92,7 @@ $$
 The heading estimation of the segment starting at waypoint $p_i$ is calculated by
 
 $$
-\theta_i = \operatorname{atan2}(\Delta y_i,\Delta x_i).
+\theta_i = \mathrm{atan2}(\Delta y_i,\Delta x_i).
 $$
 
 The signed curvature approximation between consecutive filtered waypoints is the
@@ -101,7 +101,7 @@ wrap-aware change in heading divided by the distance between the waypoints:
 $$
 \kappa_i =
 \frac{
-  \operatorname{atan2}\!\left(
+  \mathrm{atan2}\!\left(
     \sin(\theta_{i+1}-\theta_i),
     \cos(\theta_{i+1}-\theta_i)
   \right)

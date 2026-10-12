@@ -6,7 +6,7 @@
     <meta name="description" content="Interactive robot path, footprint, and cleaning gadget visualization.">
     <title>Kärcher Robotics Challenge — Data Visualization</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="visualization.js?v=6" defer></script>
+    <script src="visualization.js?v=13" defer></script>
   </head>
   <body>
     <main class="page">
@@ -24,6 +24,7 @@
       <section class="plots" aria-label="Robot path visualization">
         <article class="plot-card">
           <h2>Robot path <span class="frame-tag">world frame · m</span></h2>
+          <p id="current-speed" class="current-speed" role="status" aria-live="polite" hidden></p>
           <div class="plot-wrap">
             <svg id="path-plot" class="plot" viewBox="0 0 700 560" role="img" aria-label="Robot waypoints in the world frame"></svg>
             <div class="tooltip" role="status" hidden></div>

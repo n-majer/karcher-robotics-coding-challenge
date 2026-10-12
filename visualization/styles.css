@@ -101,6 +101,19 @@ h1 {
   font-weight: 650;
 }
 
+.current-speed {
+  width: fit-content;
+  margin: 8px 0 8px -14px;
+  text-align: left;
+  padding: 7px 11px;
+  color: #173d2a;
+  background: #e5f3e9;
+  border: 1px solid #b8d9c1;
+  border-radius: 8px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .plot-wrap {
   position: relative;
 }
