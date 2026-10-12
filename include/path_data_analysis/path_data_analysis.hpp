@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <iosfwd>
 #include <vector>
 
 namespace data_analysis {
@@ -55,6 +56,7 @@ struct RobotData {
 };
 
 RobotData read_robot_data(const std::filesystem::path& json_file);
+RobotData read_robot_data(std::istream& json_input);
 void write_visualization_data(const RobotData& robot_data,
                               const std::filesystem::path& output_file);
 

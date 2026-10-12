@@ -474,8 +474,12 @@ RobotData read_robot_data(const std::filesystem::path& json_file) {
         throw std::runtime_error("could not open file");
     }
 
+    return read_robot_data(input);
+}
+
+RobotData read_robot_data(std::istream& json_input) {
     boost::property_tree::ptree document;
-    boost::property_tree::read_json(input, document);
+    boost::property_tree::read_json(json_input, document);
 
     for (const char* key : {"path", "robot", "cleaning_gadget"}) {
         if (!document.get_child_optional(key)) {
