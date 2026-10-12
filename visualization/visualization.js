@@ -176,7 +176,7 @@ function drawAxes(
 }
 
 function drawLegend(svg, items) {
-  const firstY = HEIGHT - 57;
+  const firstY = HEIGHT + 18;
   const maximumX = WIDTH - PLOT.right;
   let x = PLOT.left + 4;
   let row = 0;
@@ -200,15 +200,20 @@ function drawLegend(svg, items) {
       svgElement("text", { x: x + 26, y, fill: COLORS.text, "font-size": 12 }, item.label),
     );
     const toggleSeries = () => {
-      const series = svg.querySelector(`[data-series="${item.target}"]`);
-      const isVisible = series.getAttribute("display") !== "none";
-      if (isVisible) {
-        series.setAttribute("display", "none");
-      } else {
-        series.removeAttribute("display");
+      const targets = item.targets ?? [item.target];
+      const series = targets
+        .map((target) => svg.querySelector(`[data-series="${target}"]`))
+        .filter(Boolean);
+      const shouldHide = series.some((element) => element.getAttribute("display") !== "none");
+      for (const element of series) {
+        if (shouldHide) {
+          element.setAttribute("display", "none");
+        } else {
+          element.removeAttribute("display");
+        }
       }
-      entry.setAttribute("aria-pressed", String(!isVisible));
-      entry.classList.toggle("is-hidden", isVisible);
+      entry.setAttribute("aria-pressed", String(!shouldHide));
+      entry.classList.toggle("is-hidden", shouldHide);
     };
     entry.addEventListener("click", toggleSeries);
     entry.addEventListener("keydown", (event) => {
@@ -325,11 +330,9 @@ function renderCleanedArea(svg, polygonGeometry, bounds) {
       d: pathData,
       fill: "#4b9d79",
       "fill-opacity": 0.3,
-      "fill-rule": "evenodd",
-      stroke: "#267653",
-      "stroke-width": 1.5,
+      "fill-rule": "nonzero",
       "pointer-events": "none",
-      "aria-label": "Calculated cleaned area",
+      "aria-label": "Cleaned area",
     }));
   }
 }
@@ -382,6 +385,7 @@ function renderVelocityPath(svg, filteredWaypoints, waypointVelocities, bounds) 
 }
 
 function renderVelocityScale(svg, waypointVelocities) {
+  if (waypointVelocities.length === 0) return;
   const speeds = waypointVelocities.map((velocity) => velocity.speed);
   const minimum = Math.min(...speeds);
   const maximum = Math.max(...speeds);
@@ -425,7 +429,8 @@ function renderVelocityScale(svg, waypointVelocities) {
       }, formatNumber(speed)),
     ];
   }).flat();
-  svg.append(
+  const scale = createSeriesGroup(svg, "velocity-scale");
+  scale.append(
     svgElement("text", { x: scaleX, y: 15, fill: COLORS.text, "font-size": 12, "font-weight": 650 }, "Velocity (m/s)"),
     svgElement("rect", { x: scaleX, y: 20, width: scaleWidth, height: 18, rx: 5, fill: "url(#path-velocity-gradient)" }),
     ...ticks,
@@ -534,7 +539,7 @@ function renderPath(
   const wrap = svg.parentElement;
   const filteredWaypoints = subsampledWaypointIndices.map((index) => waypoints[index]);
   const posePoints = [];
-  for (let index = 0; index < filteredWaypoints.length; index += 20) {
+  for (let index = 0; index < filteredWaypoints.length; index += 10) {
     posePoints.push(
       ...robot.map((point) =>
         transformPosePoint(filteredWaypoints[index], point, subsampledHeadings[index]),
@@ -545,9 +550,9 @@ function renderPath(
     );
   }
   const cleanedAreaPoints = cleanedAreaGeometry.flat(2);
-  const bounds = getBounds([waypoints, cleanedAreaPoints, posePoints]);
+  const bounds = getBounds([waypoints, cleanedAreaPoints, posePoints], true);
   drawAxes(svg, bounds, "x (m)", "y (m)");
-  svg.append(svgElement("text", { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 }, "Robot path · world frame"));
+  svg.append(svgElement("text", { x: 76, y: 28, fill: COLORS.text, "font-size": 15, "font-weight": 700 }));
   renderCleanedArea(svg, cleanedAreaGeometry, bounds);
   const original = drawPathSeries(
     svg, wrap, waypoints, bounds, "original-path", "Recorded path", COLORS.path,
@@ -564,7 +569,7 @@ function renderPath(
     filteredWaypoints,
     bounds,
     "filtered-path",
-    "Filtered path (0.01 m)",
+    "Filtered path",
     COLORS.adapted,
     subsampledWaypointIndices,
   );
@@ -586,13 +591,167 @@ function renderPath(
   );
   drawLegend(svg, [
     { label: "Recorded path", color: COLORS.path, target: "original-path" },
-    { label: "Filtered path (0.01 m)", color: COLORS.adapted, target: "filtered-path" },
+    { label: "Filtered path", color: COLORS.adapted, target: "filtered-path" },
     { label: "Cleaned area", color: "#267653", target: "cleaned-area" },
-    { label: "Speed", color: "url(#path-velocity-gradient)", target: "velocity-path" },
-    { label: "Heading (every 5)", color: "#202b36", target: "heading-arrows" },
-    { label: "Robot (every 10)", color: COLORS.footprint, target: "robot-poses" },
-    { label: "Gadget (every 10)", color: COLORS.gadget, target: "gadget-poses" },
+    {
+      label: "Speed",
+      color: "url(#path-velocity-gradient)",
+      targets: ["velocity-path", "velocity-scale"],
+    },
+    { label: "Heading", color: "#202b36", target: "heading-arrows" },
+    { label: "Robot", color: COLORS.footprint, target: "robot-poses" },
+    { label: "Cleaning gadget", color: COLORS.gadget, target: "gadget-poses" },
   ]);
+}
+
+function pointDistance(left, right) {
+  return Math.hypot(right.x - left.x, right.y - left.y);
+}
+
+function estimateHeadings(waypoints, windowDistance) {
+  return waypoints.map((_, index) => {
+    if (waypoints.length < 2) return 0;
+
+    let leftIndex = index;
+    let rightIndex = index;
+    if (index === 0) {
+      rightIndex = 1;
+      while (rightIndex + 1 < waypoints.length &&
+             pointDistance(waypoints[index], waypoints[rightIndex]) < windowDistance) {
+        rightIndex += 1;
+      }
+    } else if (index === waypoints.length - 1) {
+      leftIndex = index - 1;
+      while (leftIndex > 0 &&
+             pointDistance(waypoints[leftIndex], waypoints[index]) < windowDistance) {
+        leftIndex -= 1;
+      }
+    } else {
+      const maximumOffset = Math.min(index, waypoints.length - 1 - index);
+      let offset = 1;
+      for (; offset < maximumOffset; offset += 1) {
+        if (pointDistance(waypoints[index - offset], waypoints[index + offset]) >= windowDistance) {
+          break;
+        }
+      }
+      leftIndex = index - offset;
+      rightIndex = index + offset;
+    }
+
+    return Math.atan2(
+      waypoints[rightIndex].y - waypoints[leftIndex].y,
+      waypoints[rightIndex].x - waypoints[leftIndex].x,
+    );
+  });
+}
+
+function estimateWindowedCurvature(waypoints, headings, index, windowDistance) {
+  let leftIndex = index;
+  let rightIndex = index;
+  if (index === 0) {
+    rightIndex = index + 1;
+    while (rightIndex + 1 < waypoints.length &&
+           pointDistance(waypoints[index], waypoints[rightIndex]) < windowDistance) {
+      rightIndex += 1;
+    }
+  } else if (index === waypoints.length - 1) {
+    leftIndex = index - 1;
+    while (leftIndex > 0 &&
+           pointDistance(waypoints[leftIndex], waypoints[index]) < windowDistance) {
+      leftIndex -= 1;
+    }
+  } else {
+    const maximumOffset = Math.min(index, waypoints.length - 1 - index);
+    let offset = 1;
+    for (; offset < maximumOffset; offset += 1) {
+      if (pointDistance(waypoints[index - offset], waypoints[index + offset]) >= windowDistance) {
+        break;
+      }
+    }
+    leftIndex = index - offset;
+    rightIndex = index + offset;
+  }
+
+  const headingChange = headings[rightIndex] - headings[leftIndex];
+  const wrappedHeadingChange = Math.atan2(
+    Math.sin(headingChange),
+    Math.cos(headingChange),
+  );
+  return wrappedHeadingChange /
+    pointDistance(waypoints[leftIndex], waypoints[rightIndex]);
+}
+
+function speedForCurvature(curvature) {
+  const magnitude = Math.abs(curvature);
+  if (magnitude < 0.5) return 1.1;
+  if (magnitude >= 10) return 0.15;
+  return 1.1 - ((1.1 - 0.15) / (10 - 0.5)) * (magnitude - 0.5);
+}
+
+function convexHull(points) {
+  const sorted = [...points].sort((left, right) =>
+    left.x - right.x || left.y - right.y,
+  );
+  const cross = (origin, left, right) =>
+    (left.x - origin.x) * (right.y - origin.y) -
+    (left.y - origin.y) * (right.x - origin.x);
+  const lower = [];
+  for (const point of sorted) {
+    while (lower.length >= 2 &&
+           cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
+      lower.pop();
+    }
+    lower.push(point);
+  }
+  const upper = [];
+  for (const point of [...sorted].reverse()) {
+    while (upper.length >= 2 &&
+           cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
+      upper.pop();
+    }
+    upper.push(point);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+function createPathLayers(waypoints, gadget) {
+  const waypointIndices = [];
+  if (waypoints.length > 0) waypointIndices.push(0);
+  for (let index = 1; index < waypoints.length; index += 1) {
+    const lastRetained = waypoints[waypointIndices[waypointIndices.length - 1]];
+    if (pointDistance(lastRetained, waypoints[index]) >= 0.01) {
+      waypointIndices.push(index);
+    }
+  }
+
+  const filteredWaypoints = waypointIndices.map((index) => waypoints[index]);
+  const headings = estimateHeadings(filteredWaypoints, 0.03);
+  const waypointVelocities = filteredWaypoints.length < 2
+    ? []
+    : filteredWaypoints.map((_, index) => ({
+      speed: speedForCurvature(
+        estimateWindowedCurvature(filteredWaypoints, headings, index, 0.03),
+      ),
+    }));
+  const cleanedAreaGeometry = [];
+  if (gadget.length === 2) {
+    for (let index = 1; index < filteredWaypoints.length; index += 1) {
+      const corners = [
+        transformPosePoint(filteredWaypoints[index - 1], gadget[0], headings[index - 1]),
+        transformPosePoint(filteredWaypoints[index], gadget[0], headings[index]),
+        transformPosePoint(filteredWaypoints[index], gadget[1], headings[index]),
+        transformPosePoint(filteredWaypoints[index - 1], gadget[1], headings[index - 1]),
+      ];
+      cleanedAreaGeometry.push([convexHull(corners)]);
+    }
+  }
+
+  return {
+    waypointIndices,
+    headings,
+    waypointVelocities,
+    cleanedAreaGeometry,
+  };
 }
 
 function renderGeometry(robot, gadget) {
@@ -864,6 +1023,21 @@ function validatePointData(data) {
   };
 }
 
+function validateSummaryData(data) {
+  if (!Number.isFinite(data.path_length) ||
+      !Number.isFinite(data.cleaned_area) ||
+      data.cleaned_area < 0 ||
+      !Number.isFinite(data.traversal_time) ||
+      data.traversal_time < 0) {
+    throw new Error("Invalid or missing C++-computed path summary data.");
+  }
+  return {
+    pathLength: data.path_length,
+    cleanedArea: data.cleaned_area,
+    traversalTime: data.traversal_time,
+  };
+}
+
 function validateAnalysisData(data, pathLength) {
   const hasValidStatistics = (statistics, headingCount) =>
     statistics === null
@@ -1009,6 +1183,7 @@ function validateAnalysisData(data, pathLength) {
       !validSubsampledEstimation) {
     throw new Error("Invalid or missing C++-computed path length or headings.");
   }
+
   return {
     pathLength: data.path_length,
     cleanedArea: data.cleaned_area,
@@ -1105,9 +1280,9 @@ Promise.all([
     }
     return response.json();
   }).then(validatePointData),
-  fetch("analysis.json").then((response) => {
+  fetch("../results/analysis.json").then((response) => {
     if (!response.ok) {
-      throw new Error(`Could not load analysis.json (${response.status}). Run the C++ data_analysis program first.`);
+      throw new Error(`Could not load ../results/analysis.json (${response.status}). Run the C++ path_data_analysis program first.`);
     }
     return response.json();
   }),
@@ -1116,42 +1291,31 @@ Promise.all([
     const [pointData, analysisData] = response;
     return {
       ...pointData,
-      ...validateAnalysisData(analysisData, pointData.path.length),
+      ...validateSummaryData(analysisData),
     };
   })
   .then((data) => {
+    const pathLayers = createPathLayers(data.path, data.cleaningGadget);
     renderPath(
       data.path,
-      data.subsampledHeadingEstimation.waypointIndices,
-      data.cleanedAreaGeometry,
-      data.waypointVelocities,
-      data.subsampledHeadingEstimation.headings,
+      pathLayers.waypointIndices,
+      pathLayers.cleanedAreaGeometry,
+      pathLayers.waypointVelocities,
+      pathLayers.headings,
       data.robot,
       data.cleaningGadget,
     );
-    renderGeometry(data.robot, data.cleaningGadget);
-    renderHeadings(data.headings, data.subsampledHeadingEstimation);
-    renderCurvature(
-      data.curvatureApproximations,
-      data.windowedCurvatureApproximations,
-    );
-    renderVelocities(data.waypointVelocities);
-    renderHeadingChangeStatistics(
-      data.headingChangeStatistics,
-      data.subsampledHeadingEstimation,
-    );
-    renderWaypointDistanceStatistics(data.waypointDistanceStatistics);
     const pathLength = document.querySelector("#path-length");
     pathLength.textContent =
-      `Filtered path length: ${formatNumber(data.pathLength)} m`;
+      `Path length: ${formatNumber(data.pathLength)} m`;
     pathLength.hidden = false;
     const cleanedArea = document.querySelector("#cleaned-area");
     cleanedArea.textContent =
-      `Calculated cleaned area: ${formatNumber(data.cleanedArea)} m²`;
+      `Cleaned area: ${formatNumber(data.cleanedArea)} m²`;
     cleanedArea.hidden = false;
     const traversalTime = document.querySelector("#traversal-time");
     traversalTime.textContent =
-      `Estimated traversal time: ${formatNumber(data.traversalTime)} s`;
+      `Traversal time: ${formatNumber(data.traversalTime)} s`;
     traversalTime.hidden = false;
     setStatus("");
   })

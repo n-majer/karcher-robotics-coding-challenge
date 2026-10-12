@@ -33,7 +33,7 @@ cmake --build build
 The C++ command-line application can validate and count the sample data:
 
 ```sh
-./build/data_analysis
+./build/path_data_analysis
 ```
 
 ### Tests
@@ -48,7 +48,7 @@ ctest --test-dir build --output-on-failure
 
 ### Web Visualization
 
-The interactive browser visualization is a static page in `visualization/`. It loads geometry directly from `data/short.json` and the C++-computed metrics from `visualization/analysis.json`. First generate the metrics file with the C++ program, then serve the repository root over HTTP:
+The interactive browser visualization is a static page in `visualization/`. It loads geometry directly from `data/short.json` and the C++-computed metrics from `results/analysis.json`. First generate the metrics file with the C++ program, then serve the repository root over HTTP:
 
 ```sh
 python3 -m http.server 8000

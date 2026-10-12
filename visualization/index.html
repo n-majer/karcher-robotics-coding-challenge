@@ -6,7 +6,7 @@
     <meta name="description" content="Interactive robot path, footprint, and cleaning gadget visualization.">
     <title>Kärcher Robotics Challenge — Data Visualization</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="visualization.js" defer></script>
+    <script src="visualization.js?v=6" defer></script>
   </head>
   <body>
     <main class="page">
@@ -21,80 +21,14 @@
       <p id="cleaned-area" class="path-length" aria-live="polite" hidden></p>
       <p id="traversal-time" class="path-length" aria-live="polite" hidden></p>
 
-      <section class="plots" aria-label="Robot data plots">
+      <section class="plots" aria-label="Robot path visualization">
         <article class="plot-card">
           <h2>Robot path <span class="frame-tag">world frame · m</span></h2>
           <div class="plot-wrap">
-            <svg id="path-plot" class="plot" viewBox="0 0 700 500" role="img" aria-label="Robot waypoints in the world frame"></svg>
+            <svg id="path-plot" class="plot" viewBox="0 0 700 560" role="img" aria-label="Robot waypoints in the world frame"></svg>
             <div class="tooltip" role="status" hidden></div>
           </div>
         </article>
-
-        <article class="plot-card">
-          <h2>Robot footprint and cleaning gadget <span class="frame-tag">base_link frame · m</span></h2>
-          <div class="plot-wrap">
-            <svg id="geometry-plot" class="plot" viewBox="0 0 700 500" role="img" aria-label="Robot footprint and cleaning gadget in the base_link frame"></svg>
-            <div class="tooltip" role="status" hidden></div>
-          </div>
-        </article>
-
-        <article class="plot-card heading-card">
-          <h2>Robot path heading <span class="frame-tag">world frame · radians</span></h2>
-          <div class="plot-wrap">
-            <svg id="heading-plot" class="plot" viewBox="0 0 700 500" role="img" aria-label="Robot path heading by waypoint index in radians"></svg>
-            <div class="tooltip" role="status" hidden></div>
-          </div>
-        </article>
-
-        <article class="plot-card heading-card">
-          <h2>Filtered path curvature comparison <span class="frame-tag">1/m</span></h2>
-          <div class="plot-wrap">
-            <svg id="curvature-plot" class="plot" viewBox="0 0 700 500" role="img" aria-label="Curvature approximation by filtered path segment"></svg>
-            <div class="tooltip" role="status" hidden></div>
-          </div>
-        </article>
-
-        <article class="plot-card heading-card">
-          <h2>Estimated waypoint velocity <span class="frame-tag">m/s</span></h2>
-          <div class="plot-wrap">
-            <svg id="velocity-plot" class="plot" viewBox="0 0 700 500" role="img" aria-label="Estimated robot velocity at filtered waypoints"></svg>
-            <div class="tooltip" role="status" hidden></div>
-          </div>
-        </article>
-      </section>
-
-      <section id="heading-change-summary" class="distance-summary" aria-labelledby="distance-summary-title" hidden>
-        <h2 id="distance-summary-title">Consecutive heading changes</h2>
-        <div class="table-wrap">
-          <table class="distance-statistics">
-            <thead>
-              <tr>
-                <th scope="col">Heading estimate</th>
-                <th scope="col">Minimum heading change (rad)</th>
-                <th scope="col">Maximum heading change (rad)</th>
-                <th scope="col">Mean heading change (rad)</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section id="waypoint-distance-summary" class="distance-summary" aria-labelledby="waypoint-distance-title" hidden>
-        <h2 id="waypoint-distance-title">Distances between consecutive waypoints</h2>
-        <div class="table-wrap">
-          <table class="distance-statistics">
-            <thead>
-              <tr>
-                <th scope="col">Distance values</th>
-                <th scope="col">Minimum (m)</th>
-                <th scope="col">Maximum (m)</th>
-                <th scope="col">Mean (m)</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
       </section>
 
       <footer>Data source: <code>data/short.json</code></footer>

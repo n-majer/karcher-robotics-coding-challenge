@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <filesystem>
-#include <optional>
 #include <vector>
 
 namespace data_analysis {
@@ -19,16 +18,9 @@ struct Point2D {
     double y;
 };
 
-struct WaypointDistanceStatistics {
-    double minimum;
-    double maximum;
-    double mean;
-};
-
 struct SubsampledHeadingEstimation {
     std::vector<std::size_t> waypoint_indices;
     std::vector<double> headings;
-    std::optional<WaypointDistanceStatistics> heading_change_statistics;
 };
 
 struct CurvatureApproximation {
@@ -53,7 +45,6 @@ struct RobotData {
     double path_length{};
     double cleaned_area{};
     std::vector<double> headings;
-    std::optional<WaypointDistanceStatistics> heading_change_statistics;
     SubsampledHeadingEstimation subsampled_heading_estimation;
     std::vector<CurvatureApproximation> curvature_approximations;
     std::vector<CurvatureApproximation> windowed_curvature_approximations;
@@ -61,7 +52,6 @@ struct RobotData {
     double traversal_time{};
     std::vector<std::vector<std::vector<Point2D>>> cleaned_area_geometry;
     std::vector<double> waypoint_distances;
-    std::optional<WaypointDistanceStatistics> waypoint_distance_statistics;
 };
 
 RobotData read_robot_data(const std::filesystem::path& json_file);

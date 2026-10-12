@@ -1,4 +1,4 @@
-#include "data_analysis/robot_data.hpp"
+#include "path_data_analysis/path_data_analysis.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -81,32 +81,6 @@ std::vector<Point2D> read_points(const boost::property_tree::ptree& value,
     }
 
     return points;
-}
-
-WaypointDistanceStatistics calculate_distance_statistics(
-    const std::vector<double>& distances) {
-    const auto [minimum, maximum] =
-        std::minmax_element(distances.begin(), distances.end());
-    const double mean =
-        std::accumulate(distances.begin(), distances.end(), 0.0) /
-        static_cast<double>(distances.size());
-    return {*minimum, *maximum, mean};
-}
-
-std::optional<WaypointDistanceStatistics> calculate_heading_change_statistics(
-    const std::vector<double>& headings) {
-    if (headings.size() < 2) {
-        return std::nullopt;
-    }
-
-    std::vector<double> changes;
-    changes.reserve(headings.size() - 1);
-    for (std::size_t index = 1; index < headings.size(); ++index) {
-        const double difference = headings[index] - headings[index - 1];
-        changes.push_back(std::abs(std::atan2(std::sin(difference),
-                                              std::cos(difference))));
-    }
-    return calculate_distance_statistics(changes);
 }
 
 std::vector<CurvatureApproximation> calculate_curvature_approximations(
@@ -476,8 +450,6 @@ void calculate_path_metrics(RobotData& robot_data) {
     auto estimated_headings =
         estimate_headings(subsampled_waypoints, heading_window_distance);
     subsampled_estimation.headings = std::move(estimated_headings.first);
-    subsampled_estimation.heading_change_statistics =
-        calculate_heading_change_statistics(subsampled_estimation.headings);
     robot_data.curvature_approximations = calculate_curvature_approximations(
         subsampled_waypoints, subsampled_estimation.waypoint_indices,
         subsampled_estimation.headings);
@@ -487,15 +459,6 @@ void calculate_path_metrics(RobotData& robot_data) {
             subsampled_estimation.headings, heading_window_distance);
     calculate_velocities_and_traversal_time(robot_data, subsampled_waypoints);
 
-    if (!robot_data.waypoint_distances.empty()) {
-        robot_data.waypoint_distance_statistics = calculate_distance_statistics(
-            robot_data.waypoint_distances);
-    } else {
-        robot_data.waypoint_distance_statistics.reset();
-    }
-
-    robot_data.heading_change_statistics =
-        calculate_heading_change_statistics(robot_data.headings);
     auto cleaned_area = calculate_cleaned_area(
         subsampled_waypoints, subsampled_estimation.headings,
         robot_data.cleaning_gadget);
@@ -534,6 +497,10 @@ RobotData read_robot_data(const std::filesystem::path& json_file) {
 
 void write_visualization_data(const RobotData& robot_data,
                               const std::filesystem::path& output_file) {
+    if (!output_file.parent_path().empty()) {
+        std::filesystem::create_directories(output_file.parent_path());
+    }
+
     std::ofstream output(output_file);
     if (!output) {
         throw std::runtime_error("could not open output file '" +
@@ -543,158 +510,8 @@ void write_visualization_data(const RobotData& robot_data,
     output << std::setprecision(std::numeric_limits<double>::max_digits10)
            << "{\n  \"path_length\": " << robot_data.path_length
            << ",\n  \"cleaned_area\": " << robot_data.cleaned_area
-           << ",\n  \"headings\": [";
-    for (std::size_t index = 0; index < robot_data.headings.size(); ++index) {
-        if (index != 0) {
-            output << ',';
-        }
-        output << robot_data.headings[index];
-    }
-    output << "],\n  \"heading_change_statistics\": ";
-    if (robot_data.heading_change_statistics) {
-        const auto& statistics = *robot_data.heading_change_statistics;
-        output << "{ \"minimum\": " << statistics.minimum
-               << ", \"maximum\": " << statistics.maximum
-               << ", \"mean\": " << statistics.mean << " }";
-    } else {
-        output << "null";
-    }
-    output << ",\n  \"cleaned_area_geometry\": [";
-    for (std::size_t polygon_index = 0;
-         polygon_index < robot_data.cleaned_area_geometry.size();
-         ++polygon_index) {
-        if (polygon_index != 0) {
-            output << ',';
-        }
-        output << '[';
-        const auto& polygon = robot_data.cleaned_area_geometry[polygon_index];
-        for (std::size_t ring_index = 0; ring_index < polygon.size();
-             ++ring_index) {
-            if (ring_index != 0) {
-                output << ',';
-            }
-            output << '[';
-            const auto& ring = polygon[ring_index];
-            for (std::size_t point_index = 0; point_index < ring.size();
-                 ++point_index) {
-                if (point_index != 0) {
-                    output << ',';
-                }
-                output << '[' << ring[point_index].x << ','
-                       << ring[point_index].y << ']';
-            }
-            output << ']';
-        }
-        output << ']';
-    }
-    output << ']';
-    output << ",\n  \"curvature_approximations\": [";
-    for (std::size_t index = 0;
-         index < robot_data.curvature_approximations.size(); ++index) {
-        if (index != 0) {
-            output << ',';
-        }
-        const auto& approximation = robot_data.curvature_approximations[index];
-        output << "\n    { \"waypoint_index\": "
-               << approximation.waypoint_index
-               << ", \"start_waypoint_index\": "
-               << approximation.start_waypoint_index
-               << ", \"end_waypoint_index\": "
-               << approximation.end_waypoint_index
-               << ", \"heading_change\": " << approximation.heading_change
-               << ", \"distance\": " << approximation.distance
-               << ", \"curvature\": " << approximation.curvature << " }";
-    }
-    output << "\n  ]";
-    output << ",\n  \"windowed_curvature_approximations\": [";
-    for (std::size_t index = 0;
-         index < robot_data.windowed_curvature_approximations.size(); ++index) {
-        if (index != 0) {
-            output << ',';
-        }
-        const auto& approximation =
-            robot_data.windowed_curvature_approximations[index];
-        output << "\n    { \"waypoint_index\": "
-               << approximation.waypoint_index
-               << ", \"start_waypoint_index\": "
-               << approximation.start_waypoint_index
-               << ", \"end_waypoint_index\": "
-               << approximation.end_waypoint_index
-               << ", \"heading_change\": " << approximation.heading_change
-               << ", \"distance\": " << approximation.distance
-               << ", \"curvature\": " << approximation.curvature << " }";
-    }
-    output << "\n  ]";
-    output << ",\n  \"speed_model\": {\n"
-           << "    \"maximum_speed\": " << maximum_speed
-           << ",\n    \"minimum_speed\": " << minimum_speed
-           << ",\n    \"curvature_critical\": " << curvature_critical
-           << ",\n    \"curvature_maximum\": " << curvature_maximum
-           << "\n  },\n  \"traversal_time\": " << robot_data.traversal_time
-           << ",\n  \"waypoint_velocities\": [";
-    for (std::size_t index = 0; index < robot_data.waypoint_velocities.size();
-         ++index) {
-        if (index != 0) {
-            output << ',';
-        }
-        const auto& velocity = robot_data.waypoint_velocities[index];
-        output << "\n    { \"waypoint_index\": " << velocity.waypoint_index
-               << ", \"curvature\": " << velocity.curvature
-               << ", \"speed\": " << velocity.speed << " }";
-    }
-    output << "\n  ]";
-    const auto& subsampled_estimation =
-        robot_data.subsampled_heading_estimation;
-    output << ",\n  \"subsampled_heading_estimation\": {\n"
-           << "    \"minimum_waypoint_distance\": " << subsampling_distance
-           << ",\n    \"window_distance\": " << heading_window_distance
-           << ",\n    \"waypoint_indices\": [";
-    for (std::size_t index = 0;
-         index < subsampled_estimation.waypoint_indices.size(); ++index) {
-        if (index != 0) {
-            output << ',';
-        }
-        output << subsampled_estimation.waypoint_indices[index];
-    }
-    output << "],\n    \"headings\": [";
-    for (std::size_t index = 0;
-         index < subsampled_estimation.headings.size(); ++index) {
-        if (index != 0) {
-            output << ',';
-        }
-        output << subsampled_estimation.headings[index];
-    }
-    output << "],\n    \"heading_change_statistics\": ";
-    if (subsampled_estimation.heading_change_statistics) {
-        const auto& statistics =
-            *subsampled_estimation.heading_change_statistics;
-        output << "{ \"minimum\": " << statistics.minimum
-               << ", \"maximum\": " << statistics.maximum
-               << ", \"mean\": " << statistics.mean << " }";
-    } else {
-        output << "null";
-    }
-    output << "\n  }";
-    output << ",\n  \"waypoint_distances\": [";
-    for (std::size_t index = 0;
-         index < robot_data.waypoint_distances.size(); ++index) {
-        if (index != 0) {
-            output << ',';
-        }
-        output << robot_data.waypoint_distances[index];
-    }
-    output << "],\n  \"waypoint_distance_statistics\": ";
-    if (robot_data.waypoint_distance_statistics) {
-        const auto& statistics = *robot_data.waypoint_distance_statistics;
-        output << "{\n"
-               << "    \"minimum\": " << statistics.minimum << ",\n"
-               << "    \"maximum\": " << statistics.maximum << ",\n"
-               << "    \"mean\": " << statistics.mean << "\n"
-               << "  }";
-    } else {
-        output << "null";
-    }
-    output << "\n}\n";
+           << ",\n  \"traversal_time\": " << robot_data.traversal_time
+           << "\n}\n";
 
     if (!output) {
         throw std::runtime_error("failed to write output file '" +
