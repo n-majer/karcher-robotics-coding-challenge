@@ -33,11 +33,13 @@ using GeometryMultiPoint = geometry::model::multi_point<GeometryPoint>;
 using GeometryPolygon = geometry::model::polygon<GeometryPoint>;
 using GeometryMultiPolygon = geometry::model::multi_polygon<GeometryPolygon>;
 
+// Area plus the polygon rings consumed by the visualization.
 struct CleanedArea {
     double area;
     std::vector<std::vector<std::vector<Point2D>>> polygons;
 };
 
+// Convert one JSON coordinate to a finite double, reporting its field and point.
 double read_coordinate(const boost::property_tree::ptree& value,
                        const std::string& key,
                        std::size_t point_index) {
@@ -57,6 +59,7 @@ double read_coordinate(const boost::property_tree::ptree& value,
     return coordinate;
 }
 
+// Read an array of [x, y] pairs and reject malformed points.
 std::vector<Point2D> read_points(const boost::property_tree::ptree& value,
                                  const std::string& key) {
     if (value.empty() && !value.data().empty()) {
@@ -83,6 +86,8 @@ std::vector<Point2D> read_points(const boost::property_tree::ptree& value,
     return points;
 }
 
+// Estimate signed curvature from heading changes between consecutive filtered
+// points.
 std::vector<CurvatureApproximation> calculate_curvature_approximations(
     const std::vector<Point2D>& waypoints,
     const std::vector<std::size_t>& waypoint_indices,
@@ -120,6 +125,7 @@ std::vector<CurvatureApproximation> calculate_curvature_approximations(
     return approximations;
 }
 
+// Estimate curvature at each filtered point using the configured spatial window.
 std::vector<CurvatureApproximation> calculate_windowed_curvature_approximations(
     const std::vector<Point2D>& waypoints,
     const std::vector<std::size_t>& waypoint_indices,
@@ -194,6 +200,8 @@ std::vector<CurvatureApproximation> calculate_windowed_curvature_approximations(
     return approximations;
 }
 
+// Apply the task's curvature-based speed profile, clamped at its minimum and
+// maximum.
 double calculate_speed(double curvature) {
     const double magnitude = std::abs(curvature);
     if (magnitude < curvature_critical) {
@@ -208,6 +216,8 @@ double calculate_speed(double curvature) {
     return minimum_speed;
 }
 
+// Assign curvature-derived speeds and integrate segment time using the mean
+// endpoint speed.
 void calculate_velocities_and_traversal_time(
     RobotData& robot_data,
     const std::vector<Point2D>& filtered_waypoints) {
@@ -245,6 +255,8 @@ void calculate_velocities_and_traversal_time(
     }
 }
 
+// Estimate headings using the configured spatial window; use one-sided windows
+// at endpoints and symmetric windows for interior waypoints.
 std::pair<std::vector<double>, std::vector<double>> estimate_headings(
     const std::vector<Point2D>& waypoints,
     double window_distance) {
@@ -303,6 +315,8 @@ std::pair<std::vector<double>, std::vector<double>> estimate_headings(
     return {std::move(headings), std::move(distances)};
 }
 
+// Keep the first point and subsequent points at least the minimum distance
+// apart.
 std::vector<std::size_t> subsample_waypoint_indices(
     const std::vector<Point2D>& waypoints,
     double minimum_distance) {
@@ -322,6 +336,8 @@ std::vector<std::size_t> subsample_waypoint_indices(
     return subsampled_indices;
 }
 
+// Rotate a cleaning-gadget endpoint by the robot heading and translate it to
+// a pose.
 Point2D transform_gadget_point(const Point2D& waypoint,
                                const Point2D& gadget_point,
                                double heading) {
@@ -331,6 +347,7 @@ Point2D transform_gadget_point(const Point2D& waypoint,
             waypoint.y + gadget_point.x * sine + gadget_point.y * cosine};
 }
 
+// Build the convex hull of each consecutive pair of gadget poses, then union the swept polygons.
 CleanedArea calculate_cleaned_area(const std::vector<Point2D>& waypoints,
                                    const std::vector<double>& headings,
                                    const std::vector<Point2D>& cleaning_gadget) {
@@ -400,6 +417,7 @@ CleanedArea calculate_cleaned_area(const std::vector<Point2D>& waypoints,
     return result;
 }
 
+// Populate original-path headings and derive all metrics from the filtered path.
 void calculate_path_metrics(RobotData& robot_data) {
     const auto& waypoints = robot_data.robot_waypoints;
     robot_data.headings.clear();
@@ -459,6 +477,8 @@ void calculate_path_metrics(RobotData& robot_data) {
             std::max(robot_data.maximum_heading_change,
                      std::abs(approximation.heading_change));
     }
+    // On [0, pi], 1 - sin(angle)/angle increases with angle; its limit at zero
+    // is 0.
     robot_data.maximum_subcleaned_area_relative_error =
         robot_data.maximum_heading_change == 0.0
             ? 0.0
@@ -479,6 +499,8 @@ void calculate_path_metrics(RobotData& robot_data) {
 
 }  // namespace
 
+// Open a JSON file and delegate parsing and metric calculation to the stream
+// overload.
 RobotData read_robot_data(const std::filesystem::path& json_file) {
     std::ifstream input(json_file);
     if (!input) {
@@ -488,6 +510,7 @@ RobotData read_robot_data(const std::filesystem::path& json_file) {
     return read_robot_data(input);
 }
 
+// Validate required JSON fields, load their points, and calculate path metrics.
 RobotData read_robot_data(std::istream& json_input) {
     boost::property_tree::ptree document;
     boost::property_tree::read_json(json_input, document);
@@ -510,6 +533,8 @@ RobotData read_robot_data(std::istream& json_input) {
     return robot_data;
 }
 
+// Write the scalar summary consumed by the visualization and report I/O
+// failures.
 void write_visualization_data(const RobotData& robot_data,
                               const std::filesystem::path& output_file) {
     if (!output_file.parent_path().empty()) {

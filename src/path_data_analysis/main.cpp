@@ -7,6 +7,9 @@
 #include <numeric>
 #include <string>
 
+// Analyze the input path and write a JSON metrics summary. Optional arguments
+// are input and output paths; defaults are data/short.json and
+// results/analysis.json.
 int main(int argc, char* argv[]) {
     if (argc > 3) {
         std::cerr << "Usage: path_data_analysis [path-to-json] [visualization-json]\n";

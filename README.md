@@ -51,7 +51,7 @@ ctest --test-dir build --output-on-failure
 
 ### Web Visualization
 
-The interactive browser visualization entry page is in `docs/`, with its JavaScript and stylesheet kept in `visualization/`. It loads geometry directly from `data/short.json` and the C++-computed metrics from `results/analysis.json`. First generate the metrics file with the C++ program, then serve the repository root over HTTP:
+The interactive browser visualization (HTML, JavaScript, and stylesheet) is in `docs/`. It loads geometry directly from `data/short.json` and the C++-computed metrics from `results/analysis.json`. First generate the metrics file with the C++ program, then serve the repository root over HTTP:
 
 ```sh
 python3 -m http.server 8000
@@ -141,3 +141,10 @@ The velocities for calculating the traversal time are determined by using the pi
 - I assume that the robot heading can be estimated by aligning the base_link positive x-axis with the straight line between two consecutive waypoints of the path.
 - I assume that each measured waypoint in the world frame corresponds to the origin of the base_link frame of the robot, respectively.
 - The velocity is estimated only by considering the curvature dependent speed model. No acceleration, deceleration, or stopping at the endpoints is modelled for the robot.
+
+## What I would do with more time
+
+- Examine the code with a focus on efficiency
+- Include more tests
+- Test a different curvature estimation method
+- Integrate a function that determines the subsampling_distance and heading_window_distance dependent on the characteristics of the recorded path data
