@@ -51,13 +51,13 @@ ctest --test-dir build --output-on-failure
 
 ### Web Visualization
 
-The interactive browser visualization is a static page in `visualization/`. It loads geometry directly from `data/short.json` and the C++-computed metrics from `results/analysis.json`. First generate the metrics file with the C++ program, then serve the repository root over HTTP:
+The interactive browser visualization entry page is in `docs/`, with its JavaScript and stylesheet kept in `visualization/`. It loads geometry directly from `data/short.json` and the C++-computed metrics from `results/analysis.json`. First generate the metrics file with the C++ program, then serve the repository root over HTTP:
 
 ```sh
 python3 -m http.server 8000
 ```
 
-Then open <http://localhost:8000/visualization/> in a browser.
+Then open <http://localhost:8000/docs/> in a browser.
 
 ## Approach
 
@@ -96,7 +96,7 @@ The signed curvature approximation between consecutive filtered waypoints is the
 $$
 \kappa_i =
 \frac{
-  \mathrm{atan2}\!\left(
+  \mathrm{atan2}\left(
     \sin(\theta_{i+1}-\theta_i),
     \cos(\theta_{i+1}-\theta_i)
   \right)
@@ -121,14 +121,14 @@ $$
 A^i_{\mathrm{approx}} =
 \frac{1}{2}
 \left(r_{\mathrm{outer}}^2-r_{\mathrm{inner}}^2\right)
-\sin\!\left(|\Delta\theta_i|\right).
+\sin\left(|\Delta\theta_i|\right).
 $$
 
 For $0 < |\Delta\theta_i| \leq \pi$, the relative error of the polygonal approximation, measured against the annular-sector area, is
 
 $$
 \varepsilon_i
-= 1-\frac{\sin\!\left(|\Delta\theta_i|\right)}{|\Delta\theta_i|}.
+= 1-\frac{\sin\left(|\Delta\theta_i|\right)}{|\Delta\theta_i|}.
 $$
 
 The maximum relative error that is introduced by the polygonal approximation w.r.t. these considerations is for exampple 0.6970% when considering the maximum heading change of 0.2047 rad.
