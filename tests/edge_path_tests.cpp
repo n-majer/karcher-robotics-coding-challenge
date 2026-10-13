@@ -33,6 +33,10 @@ void test_empty_path() {
             "Empty path cleaned area should be zero");
     require(nearly_equal(data.traversal_time, 0.0),
             "Empty path traversal time should be zero");
+    require(nearly_equal(data.maximum_heading_change, 0.0) &&
+                nearly_equal(data.maximum_subcleaned_area_relative_error,
+                             0.0),
+            "Empty path approximation metrics should be zero");
     require(data.headings.empty() && data.waypoint_velocities.empty() &&
                 data.cleaned_area_geometry.empty(),
             "Empty path should not produce headings, velocities, or area geometry");
@@ -46,10 +50,27 @@ void test_single_waypoint() {
             "Single-waypoint path cleaned area should be zero");
     require(nearly_equal(data.traversal_time, 0.0),
             "Single-waypoint traversal time should be zero");
+    require(nearly_equal(data.maximum_heading_change, 0.0) &&
+                nearly_equal(data.maximum_subcleaned_area_relative_error,
+                             0.0),
+            "Single-waypoint approximation metrics should be zero");
     require(data.headings.size() == 1 && data.headings.front() == 0.0,
             "Single waypoint should receive a zero heading");
     require(data.waypoint_velocities.empty(),
             "Single waypoint should not produce velocity estimates");
+}
+
+void test_maximum_subcleaned_area_relative_error() {
+    const auto data = read_data("[[0,0],[1,0],[1,1]]");
+    const double maximum_heading_change = std::acos(-1.0) / 4.0;
+    const double expected_error =
+        1.0 - std::sin(maximum_heading_change) / maximum_heading_change;
+    require(nearly_equal(data.maximum_heading_change, maximum_heading_change),
+            "Maximum heading change should use wrapped filtered headings");
+    require(nearly_equal(data.maximum_subcleaned_area_relative_error,
+                         expected_error),
+            "Maximum approximation error should be computed from the maximum "
+            "heading change");
 }
 
 }  // namespace
@@ -58,6 +79,7 @@ int main() {
     try {
         test_empty_path();
         test_single_waypoint();
+        test_maximum_subcleaned_area_relative_error();
         std::cout << "Edge path tests passed\n";
         return 0;
     } catch (const std::exception& error) {

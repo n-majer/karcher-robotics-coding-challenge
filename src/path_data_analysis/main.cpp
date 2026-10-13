@@ -31,6 +31,12 @@ int main(int argc, char* argv[]) {
                   << "Path length: " << robot_data.path_length << " m.\n";
         std::cout << std::fixed << std::setprecision(5)
                   << "Cleaned area: " << robot_data.cleaned_area << " m^2.\n";
+        std::cout << std::fixed << std::setprecision(4)
+                  << "Maximum heading change: "
+                  << robot_data.maximum_heading_change << " rad.\n"
+                  << "Maximum subcleaned-area approximation error: "
+                  << robot_data.maximum_subcleaned_area_relative_error * 100.0
+                  << "%.\n";
         std::cout << std::fixed << std::setprecision(3)
                   << "Traversal time: " << robot_data.traversal_time
                   << " s.\n";

@@ -1,5 +1,7 @@
 {
   "path_length": 12.099145374711107,
   "cleaned_area": 8.1054604946322542,
+  "maximum_heading_change": 0.20470712628981369,
+  "maximum_subcleaned_area_relative_error": 0.0069695489371437436,
   "traversal_time": 11.556000474153612
 }

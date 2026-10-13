@@ -45,6 +45,8 @@ struct RobotData {
     std::vector<Point2D> cleaning_gadget;
     double path_length{};
     double cleaned_area{};
+    double maximum_heading_change{};
+    double maximum_subcleaned_area_relative_error{};
     std::vector<double> headings;
     SubsampledHeadingEstimation subsampled_heading_estimation;
     std::vector<CurvatureApproximation> curvature_approximations;

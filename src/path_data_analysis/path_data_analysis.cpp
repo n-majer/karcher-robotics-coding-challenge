@@ -453,6 +453,17 @@ void calculate_path_metrics(RobotData& robot_data) {
     robot_data.curvature_approximations = calculate_curvature_approximations(
         subsampled_waypoints, subsampled_estimation.waypoint_indices,
         subsampled_estimation.headings);
+    robot_data.maximum_heading_change = 0.0;
+    for (const auto& approximation : robot_data.curvature_approximations) {
+        robot_data.maximum_heading_change =
+            std::max(robot_data.maximum_heading_change,
+                     std::abs(approximation.heading_change));
+    }
+    robot_data.maximum_subcleaned_area_relative_error =
+        robot_data.maximum_heading_change == 0.0
+            ? 0.0
+            : 1.0 - std::sin(robot_data.maximum_heading_change) /
+                        robot_data.maximum_heading_change;
     robot_data.windowed_curvature_approximations =
         calculate_windowed_curvature_approximations(
             subsampled_waypoints, subsampled_estimation.waypoint_indices,
@@ -514,6 +525,10 @@ void write_visualization_data(const RobotData& robot_data,
     output << std::setprecision(std::numeric_limits<double>::max_digits10)
            << "{\n  \"path_length\": " << robot_data.path_length
            << ",\n  \"cleaned_area\": " << robot_data.cleaned_area
+           << ",\n  \"maximum_heading_change\": "
+           << robot_data.maximum_heading_change
+           << ",\n  \"maximum_subcleaned_area_relative_error\": "
+           << robot_data.maximum_subcleaned_area_relative_error
            << ",\n  \"traversal_time\": " << robot_data.traversal_time
            << "\n}\n";
 
