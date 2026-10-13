@@ -1283,15 +1283,15 @@ function renderWaypointDistanceStatistics(statistics) {
 }
 
 Promise.all([
-  fetch("../data/short.json").then((response) => {
+  fetch("../data/short.json", { cache: "no-store" }).then((response) => {
     if (!response.ok) {
       throw new Error(`Could not load ../data/short.json (${response.status}).`);
     }
     return response.json();
   }).then(validatePointData),
-  fetch("../results/analysis.json").then((response) => {
+  fetch("../results/analysis.json", { cache: "no-store" }).then((response) => {
     if (!response.ok) {
-      throw new Error(`Could not load ../results/analysis.json (${response.status}). Run the C++ path_data_analysis program first.`);
+      throw new Error(`Could not load ../results/analysis.json (${response.status}). Regenerate it with the C++ path_data_analysis program, then commit and publish the file.`);
     }
     return response.json();
   }),
